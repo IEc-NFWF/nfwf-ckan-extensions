@@ -1,0 +1,50 @@
+
+{#
+  {% ckan_extends %}
+
+{% block nums %}
+  <div class="nums">
+    <dl>
+      {% if pkg.metric_class %}
+        <dt>{{ _('Metric Class') }}</dt>
+        {% for metric_class in pkg.metric_class %}
+        <dd><nobr>{% link_for metric_class, controller='package', action='search', vocab_metric_classes=metric_class %}</nobr></dd>
+        {% endfor %}
+      {% endif %}
+    </dl>
+  </div>
+
+  <div class="nums">
+    <dl>
+      {% if pkg.restoration_activity %}
+        <dt>{{ _('Restoration Activity') }}</dt>
+        {% for restoration_activity in pkg.restoration_activity %}
+        <dd><nobr>{% link_for restoration_activity, controller='package', action='search', vocab_restoration_activities=restoration_activity %}</nobr></dd>
+        {% endfor %}
+      {% endif %}
+    </dl>
+  </div>
+
+  <div class="nums">
+    <dl>
+      {% if pkg.state_abbr %}
+        <dt>{{ _('State') }}</dt>
+        {% for state_abbr in pkg.state_abbr %}
+        <dd><nobr>{% link_for state_abbr, controller='package', action='search', vocab_state_abbreviations=state_abbr %}</nobr></dd>
+        {% endfor %}
+      {% endif %}
+    </dl>
+  </div>
+
+  <div class="nums">
+    <dl>
+      {% if pkg.reporting_year %}
+        <dt>{{ _('Reporting Year') }}</dt>
+        {% for reporting_year in pkg.reporting_year %}
+        <dd><nobr>{% link_for reporting_year, controller='package', action='search', vocab_reporting_years=reporting_year %}</nobr></dd>
+        {% endfor %}
+      {% endif %}
+    </dl>
+  </div>
+{% endblock %}
+#}

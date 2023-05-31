@@ -1,0 +1,176 @@
+{% ckan_extends %}
+
+  {% block custom_fields %}
+  {% endblock %}
+
+  #}
+
+{% block package_metadata_fields %}
+<h2>Grant Information</h2>
+{#<!--
+<div class="control-group">
+  <label title="The funded program under which monitoring is taking place." class="control-label" for="field-nfwf_program">{{ _("NFWF Program") }}</label>
+  <div class="controls">
+    <select id="field-nfwf_program" name="nfwf_program" data-module="autocomplete" multiple>
+      {% for nfwf_program in h.nfwf_programs()  %}
+        <option value="{{ nfwf_program }}" {% if nfwf_program in data.get('nfwf_program', []) %}selected="selected"{% endif %}>{{ nfwf_program }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+-->#}
+
+{#
+  <br>
+<div class="control-group">
+  <label title="The 5 digit monitoring grant ID assigned by EZGrant." class="control-label" for="field-monitoring_grant">{{ _("Monitoring Grant") }}</label>
+  <div class="controls">
+    <select id="field-monitoring_grant" name="monitoring_grant" data-module="autocomplete" multiple>
+      {% for monitoring_grant in h.monitoring_grants()  %}
+        <option value="{{ monitoring_grant }}" {% if monitoring_grant in data.get('monitoring_grant', []) %}selected="selected"{% endif %}>{{ monitoring_grant }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+#}
+<br>
+<div class="control-group">
+  <label title="The grant ID assigned by EZGrant associated with the restoration project that took place." class="control-label" for="field-resilience_grant">{{ _("Resilience Grant") }}</label>
+  <div class="controls">
+    <select id="field-resilience_grant" name="resilience_grant" data-module="autocomplete" multiple>
+      {% for resilience_grant in h.resilience_grants()  %}
+        <option value="{{ resilience_grant }}" {% if resilience_grant in data.get('resilience_grant', []) %}selected="selected"{% endif %}>{{ resilience_grant }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+
+
+
+<br>
+<div class="control-group">
+  <label title="The category of on-the-ground action perfomed for restoration." class="control-label" for="field-restoration_activity">{{ _("Restoration Activity") }}</label>
+  <div class="controls">
+    <select id="field-restoration_activity" name="restoration_activity" data-module="autocomplete" multiple>
+      {% for restoration_activity in h.restoration_activities()  %}
+        <option value="{{ restoration_activity }}" {% if restoration_activity in data.get('restoration_activity', []) %}selected="selected"{% endif %}>{{ restoration_activity }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+<br>
+
+<h2>Data Labels</h2>
+
+  <div class="control-group">
+    <label title="The category of metric outcomes for which the data are collected." class="control-label" for="field-metric_category">{{ _("Metric Category") }}</label>
+    <div class="controls">
+      <select id="field-metric_category" name="metric_category" data-module="autocomplete">
+        {% for metric_category in h.metric_categories()  %}
+          <option value="{{ metric_category }}" {% if metric_category in data.get('metric_category', []) %}selected="selected"{% endif %}>{{ metric_category }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <br>
+  <div class="control-group">
+    <label title="Metric classes are broad groupings of associated metrics." class="control-label" for="field-metric_class">{{ _("Metric Class") }}</label>
+    <div class="controls">
+      <select id="field-metric_class" name="metric_class" data-module="autocomplete" multiple>
+        {% for metric_class in h.metric_classes()  %}
+          <option value="{{ metric_class }}" {% if metric_class in data.get('metric_class', []) %}selected="selected"{% endif %}>{{ metric_class }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <br>
+  <div class="control-group">
+    <label title="Measurement stages of baseline, control, or reference are data gathered for comparison to monitoring data." class="control-label" for="field-measurement_stage">{{ _("Measurement Stage") }}</label>
+    <div class="controls">
+      <select id="field-measurement_stage" name="measurement_stage" data-module="autocomplete" multiple>
+        {% for measurement_stage in h.measurement_stages()  %}
+          <option value="{{ measurement_stage }}" {% if measurement_stage in data.get('measurement_stage', []) %}selected="selected"{% endif %}>{{ measurement_stage }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <br>
+  <div class="control-group">
+    <label title="The year(s) covered by the data." class="control-label" for="field-reporting_year">{{ _("Reporting Year") }}</label>
+    <div class="controls">
+      <select id="field-reporting_year" name="reporting_year" data-module="autocomplete" multiple>
+        {% for reporting_year in h.reporting_years()  %}
+          <option value="{{ reporting_year }}" {% if reporting_year in data.get('reporting_year', []) %}selected="selected"{% endif %}>{{ reporting_year }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <br>
+  <div class="control-group">
+    <label title="Two digit state codes of State(s) in which data were collected." class="control-label" for="field-state_abbr">{{ _("State Abbreviation)") }}</label>
+    <div class="controls">
+      <select id="field-state_abbr" name="state_abbr" data-module="autocomplete" multiple>
+        {% for state_abbr in h.state_abbreviations()  %}
+          <option value="{{ state_abbr }}" {% if state_abbr in data.get('state_abbr', []) %}selected="selected"{% endif %}>{{ state_abbr }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <br>
+
+  {% block package_basic_fields_tags %}
+{% set tag_attrs = {'data-module': 'autocomplete', 'data-module-tags': '', 'data-module-source': '/api/2/util/tag/autocomplete?incomplete=?'} %}
+{{ form.input('tag_string', id='field-tags', label=_('Optional Tags'), placeholder=_('eg. dam removal, oysters, coral'), value=data.tag_string, error=errors.tags, classes=['control-full'], attrs=tag_attrs) }}
+{% endblock %}
+
+
+  {% block package_metadata_fields_url %}
+  {% endblock %}
+
+  {% block package_metadata_author %}
+  {% endblock %}
+
+  {% block package_metadata_fields_maintainer %}
+  {% endblock %}
+<!--
+  {{ form.input('principal_investigator', label=_('Data Maintainer - Name'), id='field-principal_investigator', placeholder=_('Cindy Nekton'), value=data.principal_investigator, error=errors.principal_investigator, classes=['control-medium']) }}
+  {{ form.input('point_of_contact_email', label=_('Data Maintainer - Email'), id='field-point_of_contact_email', placeholder=_('NektonC@email.gov'), value=data.point_of_contact_email, error=errors.point_of_contact_email, classes=['control-medium']) }}
+  {{ form.input('point_of_contact_phone', label=_('Point of Contact - Phone'), id='field-point_of_contact_phone', placeholder=_('Phone number of principal investigator'), value=data.point_of_contact_phone, error=errors.point_of_contact_phone, classes=['control-medium']) }}
+  {{ form.input('alt_point_of_contact_name', label=_('Alternate Contact - Name'), id='field-alt_point_of_contact_name', placeholder=_(''), value=data.alt_point_of_contact_name, error=errors.alt_point_of_contact_name, classes=['control-medium']) }}
+  {{ form.input('alt_point_of_contact_email', label=_('Alternate Contact - Email'), id='field-alt_point_of_contact_email', placeholder=_(''), value=data.alt_point_of_contact_email, error=errors.alt_point_of_contact_email, classes=['control-medium']) }}
+  {{ form.input('alt_point_of_contact_phone', label=_('Alternate POC - Phone'), id='field-alt_point_of_contact_phone', placeholder=_('Phone number of alternate point of contact'), value=data.alt_point_of_contact_phone, error=errors.alt_point_of_contact_phone, classes=['control-medium']) }}
+  -->
+
+  {% block package_basic_fields_license %}
+  <div class="form-group">
+    {% set error = errors.license_id %}
+    <label class="control-label" for="field-license">{{ _("License") }}</label>
+    <div class="controls">
+      <div class="row">
+        <div class="col-md-6">
+          <select id="field-license" name="license_id" data-module="autocomplete">
+            {% set existing_license_id = data.get('license_id') %}
+            {% for license_id, license_desc in h.license_options(existing_license_id) %}
+            <option value="{{ license_id }}" {% if existing_license_id == license_id %}selected="selected"{% endif %}>{{ license_desc }}</option>
+            {% endfor %}
+          </select>
+          {% if error %}<span class="error-block">{{ error }}</span>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <span class="info-block info-inline">
+            <i class="fa fa-info-circle"></i>
+            {% trans %}
+            License definitions and additional information can be found
+            at <a href="http://opendefinition.org/licenses/">opendefinition.org</a>
+            {% endtrans %}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endblock %}
+
+  {{ super() }}
+
+{% endblock %}
+

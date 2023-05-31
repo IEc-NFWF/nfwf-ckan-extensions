@@ -1,0 +1,27 @@
+<div role="main" class="hero">
+  <div class="container search_heading_csm">
+    <h1 id="search_heading_h_csm">Coastal Resilience Open Data Platform</h1>
+    <p id="search_heading_t_csm">Explore and download ecological and socioeconomic monitoring datasets from the National Fish and Wildlife Foundation's Coastal Resilience program grants.</p>
+  </div>
+  <div class="container">
+    {% block search %}
+      {% snippet 'home/snippets/search.html' %}
+    {% endblock %}
+  </div>
+</div>
+<div role="main">
+  <div class="container">
+    <div class="row row2">
+      <!-- <div class="col-md-6 col2">
+        {% block promoted %}
+          {% snippet 'home/snippets/promoted.html' %}
+        {% endblock %}
+      </div> -->
+      <div class="col-md-12">
+        {% block stats %}
+          {% snippet 'home/snippets/stats.html' %}
+        {% endblock %}
+      </div>
+    </div>
+  </div>
+</div>

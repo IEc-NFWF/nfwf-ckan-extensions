@@ -1,0 +1,496 @@
+/*!
+ * Bootstrap v3.3.7 (http://getbootstrap.com)
+ * Copyright 2011-2016 Twitter, Inc.
+ * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
+ */
+/*! normalize.css v3.0.3 | MIT License | github.com/necolas/normalize.css */
+
+/* _csm indicates that the style is defined in custom.css */
+
+/* <----------------------------------------- all -----------------------------------------> */
+/* html {
+  color: #171717;
+  font-family: "merriweather",serif;
+  font-size: 20px;
+  line-height: 36px;
+  background-color: #fff;
+} */
+
+body {
+  background: none;
+  /* background-color: #fff; */
+}
+
+.p_add_spacing_csm {
+  margin-bottom: 20px;
+}
+
+a:hover, a:focus {
+  color: #495313;
+  text-decoration: none;
+}
+
+/* .stages li.active .highlight {
+  background: #8b9c21;
+} */
+
+.stages li .highlight {
+  text-indent: 5px;
+}
+
+.stages li.active::before {
+ color: #8b9c21;
+}
+
+/* adds circle after completion */
+/* .stages li.active::after {
+  color: #8b9c21;
+ } */
+
+.stages li.active .highlight {
+  /* color: #fff; */
+  background: #8b9c21;
+}
+
+.stages li.complete::before {
+  /* the following line adds color to the number(1) after step 1 is completed*/
+  color: #5a641694;
+  /* the following line adds color to the small circle after step 1 is completed*/
+  background: #8b9c2170;
+}
+
+.stages li.complete .highlight {
+  /* the following line adds color to the text(Create dataset) after step 1 is completed*/
+  color: #5a641694;
+  background: #8b9c2170;
+}
+
+/* added */
+.stages li.active:after {
+  /* border-color: rgba(140, 198, 138, 0); */
+  border-top-color: #8b9c21;
+  border-bottom-color: #8b9c21;
+}
+
+[role="main"] {
+  background: none;
+  background-color: #eceff4;
+}
+
+.select2-container {
+  max-width: 100%;
+}
+/* <--------------------------------------- all/end ---------------------------------------> */
+
+/* <------------------------------------- header.html -------------------------------------> */
+.account-masthead {
+  background: none;
+  background-color: #fff;
+  color: #000;
+}
+
+.account-masthead .account ul li a, .account-masthead .account ul li a:hover {
+  color: #000;
+  background-color: #fff;
+  text-decoration: none;
+}
+
+.account-masthead .account ul li, .account-masthead .account ul li a.sub {
+  border-left: none;
+  font-weight: bold;
+}
+
+/* .account-masthead .account ul li a {
+  font-weight: bold;
+} */
+.masthead {
+  background: none;
+  background-color: #fff;
+  color: #000;
+}
+
+.masthead .navigation .nav-pills li a {
+  font-weight: bold;
+}
+
+.masthead .navigation .nav-pills li a:hover, .masthead .navigation .nav-pills li a:focus, .masthead .navigation .nav-pills li.active a {
+  background-color: #fff;
+  /* font-weight: bold; */
+}
+
+.masthead .nav li a, .masthead .nav li a:focus, .masthead .nav li a:hover, .masthead .nav .active a, .masthead .nav .active a:hover, .masthead .nav .active a:focus {
+  color: #000;
+  background-color: #fff;
+  text-shadow: none;
+}
+
+/* .masthead .nav > li > a, .masthead .nav > li > a:focus, .masthead .nav > li > a:hover, .masthead .nav > .active > a, .masthead .nav > .active > a:hover, .masthead .nav > .active > a:focus {
+  color: #000;
+  background-color: #fff;
+  text-shadow: none;
+} */
+
+.nav-pills li.active a, .nav-pills li.active a:hover, .nav-pills li.active a:focus {
+  color: #ffffff;
+  background-color:#fff;
+}
+
+/* .nav-pills > li.active > a, .nav-pills > li.active > a:hover, .nav-pills > li.active > a:focus {
+  color: #ffffff;
+  background-color:#fff;
+} */
+
+/* .nav-pills li a {
+  font-weight: bold;
+} */
+
+.masthead .navbar-collapse {
+  float: left;
+  padding: 0 0 0 7%;
+}
+
+.masthead .nav li a {
+  padding-left: 4px;
+  padding-right: 32px;
+}
+
+.container_header_csm {
+  padding: 0 6%;
+}
+
+.header_title_csm a, .header_title_csm a:hover,  .header_title_csm a:focus {
+  color: #000;
+  text-decoration: none;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  .masthead .navigation.section {
+    float: left;
+  }
+}
+/* <----------------------------------- header.html/end -----------------------------------> */
+
+/* <------------------------------------- footer.html -------------------------------------> */
+.site-footer {
+  background-color: #1E242F;
+  border-top: 5px solid #a0b426;
+  padding: 20px 37px;
+}
+
+.footer_block_csm {
+  color: #fff;
+  font-family: "public_sans-medium",sans-serif;
+  text-align: left;
+  font-size: 15px;
+  padding-top: 10px;
+}
+
+.footer_block_csm a {
+  color: #a0b426;
+}
+
+/* #footer_panel_csm {
+  background-color: #1E242F;
+} */
+
+#footer_p_csm {
+  border-top: 8px;
+}
+
+#abt_logo {
+  text-align: right;
+}
+
+/* @media (min-width: 984px) and (max-width: 1160px) {
+  #email_csm {
+    font-size: 13px;
+  }
+} */
+
+#email_csm {
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* <----------------------------------- footer.html/end -----------------------------------> */
+
+/* <------------------------------------ homepage.html ------------------------------------> */
+.hero {
+  background: url("../images/bird_450.png");
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center center;
+}
+
+.homepage [role="main"] {
+  min-height: 450px;
+}
+
+.search_heading_csm {
+  font-family: "merriweather",serif;
+  color: white;
+  text-align: center;
+}
+
+#search_heading_h_csm {
+  font-size: 2.4375em;
+  margin-top: 14px;
+  margin-bottom: 20px;
+}
+
+#search_heading_t_csm {
+  font-size: 21px;
+  margin: 20px 50px 25px 50px;
+}
+
+.homepage [role="main"] .container {
+  text-align: center;
+}
+
+.homepage .box .inner {
+  line-height: 23px;
+}
+
+.homepage .stats ul {
+  border-bottom: solid 2px rgba(119, 119, 118, 0.5);
+  padding-bottom: 20px;
+}
+
+.homepage .stats ul li {
+  width: 33%;
+  font-size: 2rem;
+}
+
+.homepage .stats ul li a:hover, .homepage .stats ul li a:visited {
+  color: #206b82;
+}
+
+.box .stats .home_program_items {
+  
+}
+
+.home_programs_heading_csm {
+  font-size: 0.9em;
+  margin-top: 35px;
+  text-align: left;
+  color: #777776;
+}
+/* <------------------------------------- search bar -------------------------------------> */
+.homepage .module-search {
+  padding: 0;
+  background: #ffffff;
+  border: solid 2px #005d7a;
+  box-shadow: none;
+  border-radius: 6px;
+}
+
+.homepage .module-search .module-content {
+  border-radius: 3px 3px 0 0;
+  background-color: #fff;
+  border-bottom: none;
+  border-radius: 6px;
+}
+
+.module-narrow .module-content, .module-narrow .module-footer {
+  padding-left: 31px;
+  padding-right: 14px;
+  padding-top:0;
+  padding-bottom: 0;
+}
+
+.module-shallow .module-content:first-child {
+  padding-top: 8px;
+}
+
+.module-shallow .module-content:last-child {
+  padding-bottom: 6px;
+}
+
+.search-form .search-input.search-giant input {
+  padding: 0;
+}
+
+/*replaced .form-control by the following */
+.search-input input {
+  border: none;
+  box-shadow: 0 0 0;
+  border-radius: 0;
+}
+
+.search-input input:focus {
+  border: none !important;
+}
+
+/* *:focus {
+  outline: none !important;
+} */
+
+/* input::-moz-focus-inner, ::-moz-focus-inner {
+  outline: none;
+} */
+
+/* .search-input input:focus, .form-control:focus {
+  outline: none;
+} */
+
+.search-form .search-input.search-giant input {
+  font-size: 16px;
+  padding: 25px 0 15px 0;
+  font-weight: bold;
+}
+
+.search-form .search-input button i, .search-form .search-input button:hover i {
+  color: #004A7E;
+}
+
+.form-control:focus {
+  outline: 0;
+  -webkit-box-shadow: none;
+  box-shadow: none;
+}
+/* <------------------------------------- search bar/end -------------------------------------> */
+/* <---------------------------------- homepage.html/end ----------------------------------> *
+
+/* <------------------------------------- about.html -------------------------------------> */
+.page_heading_csm {
+  font-size: 2.4375em;
+}
+
+.short_underline_csm {
+  display: block;
+  width: 50px;
+  height: 3px;
+  background-color: #a0b426;
+  margin-bottom: 20px;
+}
+
+.main_container_csm {
+  font-family: "merriweather",serif;
+  font-size: 20px;
+  line-height: 36px;
+  color: black;
+  max-width: 1100px;
+  margin: 50px 20% 85px 20%;
+}
+
+.main_container_csm a {
+  color: #a0b426;
+}
+
+.breadcrumb {
+  background-color: #fff;
+}
+/* <----------------------------------- about.html/end -----------------------------------> */
+
+/* <-------------------------------------- buttons ---------------------------------------> */
+.btn-primary {
+  background-color: #00435e;
+  border: none;
+  transition: background-color 250ms ease-out;
+}
+
+.btn-primary:hover {
+  background-color: #3369c3;
+}
+
+.btn-success {
+  color: #ffffff;
+  background-color: #8b9c21;
+  border-color: #8b9c21;
+  transition: background-color 250ms ease-out;
+}
+
+.btn-success:hover, .btn-success:focus {
+  color: #ffffff;
+  background-color: #a0b426;
+  border-color: #a0b426;
+}
+/* <------------------------------------ buttons/end -------------------------------------> */
+
+/* <----------------------------------- media queries ------------------------------------> */
+/* @media (max-width: 977) {
+  #abt_logo {
+    text-align: left;
+  }
+} */
+
+/* @media (min-width: 768px) {
+  .hero {
+    background: url("../images/background_title.png");
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center center;
+  }
+} */
+/* <--------------------------------- media queries/end ----------------------------------> */
+/* resizing homepage background image */
+@media (max-width: 1199px) {
+  .homepage [role="main"] {
+    min-height: 540px;
+  }
+}
+
+@media (max-width: 1186px) {
+  .homepage [role="main"] {
+    min-height: 520px;
+  }
+}
+
+@media (max-width: 1172px) {
+  .homepage [role="main"] {
+    min-height: 500px;
+  }
+}
+
+@media (max-width: 991px) {
+  .homepage [role="main"] {
+    min-height: 550px;
+  }
+}
+
+@media (max-width: 727px) {
+  .homepage [role="main"] {
+    min-height: 575px;
+  }
+}
+
+@media (max-width: 593px) {
+  .homepage [role="main"] {
+    min-height: 685px;
+  }
+}
+
+@media (max-width: 580px) {
+  .homepage [role="main"] {
+    min-height: 645px;
+  }
+}
+
+@media (max-width: 488px) {
+  .homepage [role="main"] {
+    min-height: 715px;
+  }
+}
+
+@media (max-width: 421px) {
+  .homepage [role="main"] {
+    min-height: 735px;
+  }
+}
+
+@media (max-width: 410px) {
+  .homepage [role="main"] {
+    min-height: 815px;
+  }
+}
+/* resizing homepage background image/end */
+
+
+@media (max-width: 767px) {
+  .toolbar .breadcrumb {
+    color: #000;
+  }
+  .toolbar .breadcrumb a {
+    color: #000;
+  }
+}

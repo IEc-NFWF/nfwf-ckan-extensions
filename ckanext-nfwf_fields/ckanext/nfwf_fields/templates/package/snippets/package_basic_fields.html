@@ -1,0 +1,18 @@
+
+{% ckan_extends %}
+
+
+{% block package_basic_fields_license %}
+{% endblock %}
+
+
+{% block package_basic_fields_tags %}
+{% endblock %}
+
+{% block package_basic_fields_custom %}
+<h2>Contact</h2>
+{{ form.input('principal_investigator', label=_('Data Maintainer - Name'), id='field-principal_investigator', placeholder=_('Cindy Nekton'), value=data.principal_investigator, error=errors.principal_investigator, classes=['control-medium']) }}
+{{ form.input('point_of_contact_email', label=_('Data Maintainer - Email'), id='field-point_of_contact_email', placeholder=_('NektonC@email.gov'), value=data.point_of_contact_email, error=errors.point_of_contact_email, classes=['control-medium']) }}
+
+{% endblock %}
+
