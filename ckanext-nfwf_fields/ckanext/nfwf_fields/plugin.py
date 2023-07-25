@@ -133,14 +133,14 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
         '''
         # This changes the facet order and removes the license facet from the filter list.
         facets_dict['groups'] = facets_dict.pop('groups')
-	facets_dict['groups'] = 'Programs'
+        facets_dict['groups'] = 'Programs'
         facets_dict['vocab_reporting_years'] = plugins.toolkit._("Years")
         facets_dict['vocab_metric_classes'] = plugins.toolkit._("Metric Classes")
         facets_dict['vocab_restoration_activities'] = plugins.toolkit._("Restoration Activities")
         facets_dict['vocab_state_abbreviations'] = plugins.toolkit._("States")
         facets_dict['organization'] = facets_dict.pop('organization')
         facets_dict['organization'] = 'Grants'
-	facets_dict['res_format'] = facets_dict.pop('res_format')
+        facets_dict['res_format'] = facets_dict.pop('res_format')
         facets_dict['tags'] = facets_dict.pop('tags')
         facets_dict.pop('license_id')
 
@@ -151,7 +151,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
         # This changes the facet order and removes some facets from the filter list.
         facets_dict['organization'] = facets_dict.pop('organization')
         facets_dict['organization'] = 'Grants'
-	facets_dict['vocab_metric_classes'] = plugins.toolkit._("Metric Classes")
+        facets_dict['vocab_metric_classes'] = plugins.toolkit._("Metric Classes")
         facets_dict['vocab_restoration_activities'] = plugins.toolkit._("Restoration Activities")
         facets_dict['vocab_reporting_years'] = plugins.toolkit._("Years")
         facets_dict['vocab_state_abbreviations'] = plugins.toolkit._("States")
