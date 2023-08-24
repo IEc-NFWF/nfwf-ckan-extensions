@@ -1,0 +1,4 @@
+nfwf_css:
+  contents:
+    - custom.css
+    - main.css
