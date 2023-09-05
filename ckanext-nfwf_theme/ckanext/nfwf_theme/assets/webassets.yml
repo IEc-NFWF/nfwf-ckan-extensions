@@ -1,4 +1,11 @@
+nfwfmain_css:
+  output: vendor/%(version)s_nfwfmain.css
+  contents:
+  - nfwfmain.css
+
 nfwf_css:
+  output: vendor/%(version)s_custom.css
+  preload:
+    - nfwfmain_css
   contents:
     - custom.css
-    - main.css
