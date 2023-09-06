@@ -20,9 +20,9 @@
     {% snippet 'snippets/search_form.html', form_id='group-search-form', type='group', query=c.q, sorting_selected=c.sort_by_selected, count=c.page.item_count, placeholder=_('Search for programs...'), show_empty=request.params, no_bottom_border=true if c.page.items, sorting = [(_('Name Ascending'), 'title asc'), (_('Name Descending'), 'title desc')] %}
   {% endblock %}
   {% block groups_list %}
-    {% if c.page.items or request.params %}
-      {% if c.page.items %}
-        {% snippet "group/snippets/group_list.html", groups=c.page.items %}
+    {% if g.page.items or request.params %}
+      {% if g.page.items %}
+        {% snippet "group/snippets/group_list.html", groups=g.page.items %}
       {% endif %}
     {% else %}
       <p class="empty">

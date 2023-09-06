@@ -7,13 +7,13 @@
 {% block breadcrumb_content %}
   <li>{% link_for _('Programs'), controller='group', action='index', named_route=group_type + '.index' %}</li>
   {% block breadcrumb_content_inner %}
-    <li>{% link_for group.display_name|truncate(35), controller='group', action='read', id=group.name, named_route=group_type + '.read' %}</li>
+    <li>{% link_for group.display_name|truncate(35), controller='group', id=group.name, named_route=group_type + '.read' %}</li>
     <li class="active">{% link_for _('Manage'), controller='group', action='edit', id=group.name, named_route=group_type + '.edit' %}</li>
   {% endblock %}
 {% endblock %}
 
 {% block content_action %}
-  {% link_for _('View'), controller='group', action='read', id=c.group_dict.name, class_='btn btn-default', icon='eye', named_route=group_type + '.read' %}
+  {% link_for _('View'), controller='group', id=c.group_dict.name, class_='btn btn-default', icon='eye', named_route=group_type + '.read' %}
 {% endblock %}
 
 {% block content_primary_nav %}

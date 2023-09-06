@@ -214,8 +214,8 @@ a:hover, a:focus {
 /* <----------------------------------- footer.html/end -----------------------------------> */
 
 /* <------------------------------------ homepage.html ------------------------------------> */
-.hero {
-  background: url("../images/bird_450.png");
+.homepage .hero {
+  background: url("../../base/images/bird_450.png");
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center center;

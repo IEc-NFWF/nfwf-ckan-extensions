@@ -1,4 +1,5 @@
 {% set stats = h.get_site_statistics() %}
+{% set groups = h.get_featured_groups(stats.group_count) %}
 
 <div class="box stats">
   <div class="inner">
@@ -28,6 +29,21 @@
     <div>
       <h2 class="home_programs_heading_csm">PROGRAM DATASETS</h2>
       <div class="short_underline_csm"></div>
+      <ul class="media-grid" data-module="media-grid">
+        {% block group_list_inner %}
+          {% for group in groups %}
+            {% set type = group.type or 'group' %}
+            {% set url = h.url_for(type ~ '.read', id=group.name) %}
+            <li class="media-item" style="position: absolute; left: 0px; top: 15px; width:340px;">
+              <img src="{{ group.image_display_url or h.url_for_static('/base/images/placeholder-group.png') }}" alt="{{ group.name }}" class="media-image img-responsive">
+              <h3 class="media-heading">{{ group.display_name }}</h3>
+              <a href="{{ url }}" title="{{ _('View {name}').format(name=group.display_name) }}" class="media-view">
+                <span>{{ _('View {name}').format(name=group.display_name) }}</span>
+              </a>
+            </li>
+          {% endfor %}
+        {% endblock %}
+      </ul>
     </div>
   </div>
 </div>
