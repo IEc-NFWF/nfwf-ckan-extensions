@@ -1,19 +1,206 @@
 import ckan.plugins as plugins
 import ckan.plugins.toolkit as toolkit
 import ckan.lib.helpers as helpers
+import ckan.model as model
+from ckan.common import  (c, request)
+
 
 ## Currently storing in code, switch to using configuration file
-metric_class_vocab = ['Avian' ,'Beach Geomorphology'  ,'Dune Vegetation'  ,'Hydrology'    ,'Marsh Geomorphology'  ,'Marsh Vegetation' ,'Nekton'   ,'Riparian Vegetation'  
-,'Riverine Habitat' ,'Shoreline'    ,'Submerged Aquatic Vegetation'   ,'Economic Resilience' ,'Human Health and Safety'  
-,'Property and Infrastructure Protection and Enhancement']
-resilience_grant_vocab = ['NFWF-41739','NFWF-41766','NFWF-41795']
+metric_class_vocab = [
+'Avian',
+'Beach Geomorphology',
+'Dune Geomorphology',
+'Coral Community',
+'Elevation',
+'Hydrology',
+'Macroinvertebrates',
+'Marsh Geomorphology',
+'Nekton',
+'Shoreline',
+'Vegetation',
+'Water Quality'
+]
+resilience_grant_vocab = [
+'NFWF-41739',
+'NFWF-41766',
+'NFWF-41795',
+'NFWF-41991',
+'NFWF-42279',
+'NFWF-42442',
+'NFWF-42958',
+'NFWF-42959',
+'NFWF-43006',
+'NFWF-43095',
+'NFWF-43281',
+'NFWF-43322',
+'NFWF-43429',
+'NFWF-43931',
+'NFWF-43986',
+'NFWF-44109',
+'NFWF-44157',
+'NFWF-44167',
+'NFWF-44225',
+'NPS-1A',
+'USFWS-01',
+'USFWS-06',
+'USFWS-09',
+'USFWS-15',
+'USFWS-21',
+'USFWS-31',
+'USFWS-33',
+'USFWS-37',
+'USFWS-43',
+'USFWS-50',
+'USFWS-51',
+'USFWS-53',
+'USFWS-57',
+'USFWS-65',
+'USFWS-76',
+'USFWS-77',
+'USFWS-89',
+'USFWS-94'
+]
 monitoring_grant_vocab = ['55013','55066','55032','55094','55097','55098','55110','55076']
-nfwf_program_vocab = ['Hurricane Sandy Monitoring','NCRF']
-reporting_year_vocab = ['Pre-2014','2014','2015','2016','2017','2018','2019','2020','2021','2022','2023','2024','2025','2026','2027','2028','2029','2030']
-state_abbr_vocab = ['CT','DE','MA','MD','ME','NJ','NY','RI','VA']
-measurement_stage_vocab = ['Reference','Baseline','Control','Monitoring']
-restoration_activity_vocab = ['Aquatic Connectivity Restoration','Beach and or Dune Restoration','Living Shoreline Restoration','Marsh Restoration']
+nfwf_program_vocab = [
+'Hurricane Sandy Coastal Resliency Competitive Grant Program',
+'National Coastal Resilience Fund',
+'Emergency Coastal Resilience Fund'
+]
+reporting_year_vocab = [
+'Pre-2014','2014','2015','2016','2017','2018','2019','2020','2021'
+,'2022','2023','2024','2025','2026','2027','2028','2029','2030'
+]
+state_abbr_vocab = [
+'AK','AL','AS','CA','CT','DE','FL','GA','GU','HI','LA','MA','MD','ME',
+'MP','MS','NC','NH','NJ','NY','OR','PR','RI','SC','TX','VA','VI','WA'
+]
+measurement_stage_vocab = [
+'Reference',
+'Baseline',
+'Control',
+'Monitoring'
+]
+restoration_activity_vocab = [
+'Aquatic Connectivity',
+'Beach',
+'Dune',
+'Living Shoreline',
+'Marsh',
+'Floodplain Connectivity',
+'Coral',
+'Mangrove'
+]
+
 metric_category_vocab = ['Ecological', 'Socioeconomic']
+
+# from ckan.lib.helpers import unselected_facet_items
+
+# def get_facets_unselected(facet, limit=None):
+#     '''Return the list of unselected facet items for the given facet, sorted
+#     by count.
+#     Reads the complete list of facet items for the given facet from
+#     c.search_facets, and filters out the facet items that the user has already
+#     selected.
+#     Arguments:
+#     facet -- the name of the facet to filter.
+#     limit -- the max. number of facet items to return.
+#     exclude_active -- only return unselected facets.
+#     '''
+#     if not c.search_facets or \
+#             not c.search_facets.get(facet) or \
+#             not c.search_facets.get(facet).get('items'):
+#         return []
+#     facets = []
+#     for facet_item in c.search_facets.get(facet)['items']:
+#         if not len(facet_item['name'].strip()):
+#             continue
+#         if not (facet, facet_item['name']) in request.params.items():
+#             facets.append(dict(active=False, **facet_item))
+#     facets = sorted(facets, key=lambda item: item['count'], reverse=True)
+#     return facets
+
+# def get_facets_selected(facet):
+#     '''
+#     Returns the list of selected facet items for the given facet, sorted
+#     by count.
+#     '''
+#     if not c.search_facets or \
+#             not c.search_facets.get(facet) or \
+#             not c.search_facets.get(facet).get('items'):
+#         return []
+#     facets = []
+#     for facet_item in c.search_facets.get(facet)['items']:
+#         if not len(facet_item['name'].strip()):
+#             continue
+#         if (facet, facet_item['name']) in request.params.items():
+#             facets.append(dict(active=False, **facet_item))
+#     facets = sorted(facets, key=lambda item: item['count'], reverse=True)
+#     return facets
+
+def groups():
+    query = model.Group.all(group_type='group')
+    
+    def convert_to_dict(user):
+        out = {}
+        for k in ['id', 'name', 'title']:
+            out[k] = getattr(user, k)
+        return out
+
+    out = map(convert_to_dict, query.all())
+
+    return out
+
+def default_group(group_id):
+    query = model.Group.all(group_type='group')
+
+    def convert_to_dict(user):
+        out = {}
+        for k in ['id', 'name', 'title']:
+            out[k] = getattr(user, k)    
+        return out
+
+    default = group_id[0]['id']
+    out = map(convert_to_dict, query.all())
+
+    new_out = []
+    for i in out:
+        if i['id'] == default:
+            new_out.append(i)
+        else:
+            continue
+    return new_out
+
+def groups_reload(available_groups,selected_groups):
+    query = model.Group.all(group_type='group')
+
+    def convert_to_dict(user):
+        out = {}
+        for k in ['id', 'name', 'title']:
+            out[k] = getattr(user, k)    
+        return out
+
+    current_group = selected_groups[0]['id']
+    out = map(convert_to_dict, query.all())
+
+    user_groups = []
+    for i in available_groups:
+        user_groups.append(i['id'])
+
+    selected_out = []
+    for i in out:
+        if i['id'] == current_group:
+            continue
+        else:
+            selected_out.append(i)
+    
+    new_out = []
+    for i in selected_out:
+        if i['id'] in user_groups:
+            new_out.append(i)
+        else:
+            continue
+    
+    return new_out
 
 def add_tags(data,vocabulary_list,context):
     vocab = toolkit.get_action('vocabulary_show')(context,data)
@@ -133,14 +320,13 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
         '''
         # This changes the facet order and removes the license facet from the filter list.
         facets_dict['groups'] = facets_dict.pop('groups')
-	facets_dict['groups'] = 'Programs'
-        facets_dict['vocab_reporting_years'] = plugins.toolkit._("Years")
+        facets_dict['groups'] = 'Programs'
+        facets_dict['organization'] = facets_dict.pop('organization')
+        facets_dict['organization'] = "Grants"
         facets_dict['vocab_metric_classes'] = plugins.toolkit._("Metric Classes")
         facets_dict['vocab_restoration_activities'] = plugins.toolkit._("Restoration Activities")
-        facets_dict['vocab_state_abbreviations'] = plugins.toolkit._("States")
-        facets_dict['organization'] = facets_dict.pop('organization')
-        facets_dict['organization'] = 'Grants'
-	facets_dict['res_format'] = facets_dict.pop('res_format')
+        facets_dict['vocab_state_abbreviations'] = plugins.toolkit._("States and Territories")
+        facets_dict['res_format'] = facets_dict.pop('res_format')
         facets_dict['tags'] = facets_dict.pop('tags')
         facets_dict.pop('license_id')
 
@@ -150,11 +336,10 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
     def group_facets(self, facets_dict, group_type, package_type):
         # This changes the facet order and removes some facets from the filter list.
         facets_dict['organization'] = facets_dict.pop('organization')
-        facets_dict['organization'] = 'Grants'
-	facets_dict['vocab_metric_classes'] = plugins.toolkit._("Metric Classes")
+        facets_dict['organization'] = "Grants"
+        facets_dict['vocab_metric_classes'] = plugins.toolkit._("Metric Classes")
         facets_dict['vocab_restoration_activities'] = plugins.toolkit._("Restoration Activities")
-        facets_dict['vocab_reporting_years'] = plugins.toolkit._("Years")
-        facets_dict['vocab_state_abbreviations'] = plugins.toolkit._("States")
+        facets_dict['vocab_state_abbreviations'] = plugins.toolkit._("States and Territories")
         facets_dict['res_format'] = facets_dict.pop('res_format')
         facets_dict.pop('tags')
         facets_dict.pop('license_id')
@@ -168,14 +353,13 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
         # This changes the facet order and removes some facets from the filter list.
         facets_dict['vocab_metric_classes'] = plugins.toolkit._("Metric Classes")
         facets_dict['vocab_restoration_activities'] = plugins.toolkit._("Restoration Activities")
-        facets_dict['vocab_reporting_years'] = plugins.toolkit._("Years")
-        facets_dict['vocab_state_abbreviations'] = plugins.toolkit._("States")
+        facets_dict['vocab_state_abbreviations'] = plugins.toolkit._("States and Territories")
         facets_dict['res_format'] = facets_dict.pop('res_format')
         facets_dict.pop('organization')
         facets_dict.pop('tags')
         facets_dict.pop('license_id')
         facets_dict.pop('groups')
-
+        
         # Return the updated facet dict.
         return facets_dict
 
@@ -199,7 +383,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
             'alt_point_of_contact_phone': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_extras')],
 
-            'metric_category': [toolkit.get_validator('ignore_missing'),
+            'metric_category': [toolkit.get_validator('not_empty'),
                                 toolkit.get_converter('convert_to_tags')('metric_categories')],
 
             'metric_class': [toolkit.get_validator('ignore_missing'),
@@ -210,7 +394,6 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
 
             'monitoring_grant': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_tags')('monitoring_grants')],
-
 
             'nfwf_program': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_tags')('nfwf_programs')],
@@ -228,7 +411,6 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
        
             'restoration_activity': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_tags')('restoration_activities')]
-
         })
  #       schema['resources'].update({
   #      'custom_resource_text' : [ toolkit.get_validator('ignore_missing') ]
@@ -268,7 +450,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
                         toolkit.get_validator('ignore_missing')],
 
             'metric_category': [toolkit.get_converter('convert_from_tags')('metric_categories'),
-                toolkit.get_validator('ignore_missing')],
+                toolkit.get_validator('not_empty')],
             'metric_class': [
                 toolkit.get_converter('convert_from_tags')('metric_classes'),
                 toolkit.get_validator('ignore_missing')],
@@ -292,7 +474,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
                 toolkit.get_validator('ignore_missing')],
             'restoration_activity': [
                 toolkit.get_converter('convert_from_tags')('restoration_activities'),
-                toolkit.get_validator('ignore_missing')]               
+                toolkit.get_validator('ignore_missing')]       
         })
 
  #       schema['resources'].update({
@@ -320,7 +502,10 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
             'reporting_years' : reporting_years, 
             'state_abbreviations' : state_abbreviations, 
             'measurement_stages' : measurement_stages, 
-            'restoration_activities' : restoration_activities}
+            'restoration_activities' : restoration_activities,
+            'groups_reload' : groups_reload,
+            'default_group' : default_group,
+            'groups': groups}
 
     # IConfigurer
 

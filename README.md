@@ -1,2 +1,1 @@
-# nfwf-ckan-extensions
-CKAN extensions for the NFWF data repository site
+This repository includes the code for NFWF project.

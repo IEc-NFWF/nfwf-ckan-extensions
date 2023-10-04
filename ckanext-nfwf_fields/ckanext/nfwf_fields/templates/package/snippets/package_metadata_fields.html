@@ -6,36 +6,62 @@
   #}
 
 {% block package_metadata_fields %}
-<h2>Grant Information</h2>
-{#<!--
-<div class="control-group">
-  <label title="The funded program under which monitoring is taking place." class="control-label" for="field-nfwf_program">{{ _("NFWF Program") }}</label>
-  <div class="controls">
-    <select id="field-nfwf_program" name="nfwf_program" data-module="autocomplete" multiple>
-      {% for nfwf_program in h.nfwf_programs()  %}
-        <option value="{{ nfwf_program }}" {% if nfwf_program in data.get('nfwf_program', []) %}selected="selected"{% endif %}>{{ nfwf_program }}</option>
-      {% endfor %}
-    </select>
-  </div>
-</div>
--->#}
 
-{#
-  <br>
-<div class="control-group">
-  <label title="The 5 digit monitoring grant ID assigned by EZGrant." class="control-label" for="field-monitoring_grant">{{ _("Monitoring Grant") }}</label>
+{% set groups_available = h.groups_available(am_member=True) %}
+{% set user_is_sysadmin = h.check_access('sysadmin') %}
+{% set show_groups_selector = groups_available %}
+{% set show_visibility_selector = dataset_has_group or (groups_available and (user_is_sysadmin or dataset_is_draft)) %}
+
+{% set group_name = 'groups__%s__id' % data.groups|length %}
+
+{% if show_groups_selector %}
+<div class="control-group control-full">
+  <span title="This field is required" class="control-required">*</span>
+  <label  class="control-label" for="field-group">{{ _('Program Affiliation') }}<i class="fa fa-info-circle" title="The NFWF Program under which the grant was awarded."></i></label>
   <div class="controls">
-    <select id="field-monitoring_grant" name="monitoring_grant" data-module="autocomplete" multiple>
-      {% for monitoring_grant in h.monitoring_grants()  %}
-        <option value="{{ monitoring_grant }}" {% if monitoring_grant in data.get('monitoring_grant', []) %}selected="selected"{% endif %}>{{ monitoring_grant }}</option>
-      {% endfor %}
+    <select id="field-group" name="{{ group_name }}" data-module="autocomplete">
+
+      {% set groups_available_count = groups_available|length %}
+
+      {% if groups_available_count < 2 %}
+      
+        {% for group in h.default_group(groups_available) %}
+        <option value="{{ group.id }}" selected="selected">{{ group.title }}</option>
+        {% endfor %}      
+
+      {% else %}
+      
+        {% if data.groups %}
+
+          {% for group in data.groups %}
+          <option value="{{ group.id }}" selected="selected">{{ group.title}}</option>
+          {% endfor %}
+
+          {% for group in h.groups_reload(groups_available,data.groups) %}
+          <option value="{{ group.id }}">{{ group.title }}</option>
+          {% endfor %}
+
+        {% else %}
+        
+            <option value="">--Please choose an option--</option>
+
+            {% for group in groups_available %}
+                <option value="{{ group.id }}">{{ group.title }}</option>
+            {% endfor %}      
+
+        {% endif %}
+
+      {% endif %}
+
     </select>
   </div>
 </div>
-#}
+{% endif %}
+
 <br>
+
 <div class="control-group">
-  <label title="The grant ID assigned by EZGrant associated with the restoration project that took place." class="control-label" for="field-resilience_grant">{{ _("Resilience Grant") }}</label>
+  <label class="control-label" for="field-resilience_grant">{{ _("Resilience Grant(s)") }}<i class="fa fa-info-circle" title="The resilience grant ID assigned to the restoration project where monitoring is taking place."></i></label>
   <div class="controls">
     <select id="field-resilience_grant" name="resilience_grant" data-module="autocomplete" multiple>
       {% for resilience_grant in h.resilience_grants()  %}
@@ -49,7 +75,7 @@
 
 <br>
 <div class="control-group">
-  <label title="The category of on-the-ground action perfomed for restoration." class="control-label" for="field-restoration_activity">{{ _("Restoration Activity") }}</label>
+  <label class="control-label" for="field-restoration_activity">{{ _("Restoration Activities") }}<i class="fa fa-info-circle" title="This refers to the broad category of on the ground action performed during the restoration project."></i></label>
   <div class="controls">
     <select id="field-restoration_activity" name="restoration_activity" data-module="autocomplete" multiple>
       {% for restoration_activity in h.restoration_activities()  %}
@@ -61,11 +87,12 @@
 <br>
 
 <h2>Data Labels</h2>
-
   <div class="control-group">
-    <label title="The category of metric outcomes for which the data are collected." class="control-label" for="field-metric_category">{{ _("Metric Category") }}</label>
+    <span title="This field is required" class="control-required">*</span>
+    <label class="control-label" for="field-metric_category">{{ _("Metric Category") }}<i class="fa fa-info-circle" title="The category of metric outcomes for which the data are collected." ></i></label>
     <div class="controls">
       <select id="field-metric_category" name="metric_category" data-module="autocomplete">
+        <option value="">--Please choose an option--</option>
         {% for metric_category in h.metric_categories()  %}
           <option value="{{ metric_category }}" {% if metric_category in data.get('metric_category', []) %}selected="selected"{% endif %}>{{ metric_category }}</option>
         {% endfor %}
@@ -74,7 +101,7 @@
   </div>
   <br>
   <div class="control-group">
-    <label title="Metric classes are broad groupings of associated metrics." class="control-label" for="field-metric_class">{{ _("Metric Class") }}</label>
+    <label class="control-label" for="field-metric_class">{{ _("Metric Classes") }}<i class="fa fa-info-circle" title="Metric classes are broad groupings of associated metrics." ></i></label>
     <div class="controls">
       <select id="field-metric_class" name="metric_class" data-module="autocomplete" multiple>
         {% for metric_class in h.metric_classes()  %}
@@ -85,7 +112,7 @@
   </div>
   <br>
   <div class="control-group">
-    <label title="Measurement stages of baseline, control, or reference are data gathered for comparison to monitoring data." class="control-label" for="field-measurement_stage">{{ _("Measurement Stage") }}</label>
+    <label class="control-label" for="field-measurement_stage">{{ _("Measurement Stage(s)") }}<i class="fa fa-info-circle" title="Choose as many as are applicable. Measurement stages include 1) monitoring: data which is being collected for evaluation, 2) baseline: collecting or utilizing previously collected data, 3) control: collecting data from a site where no restoration occurred in addition to the monitoring site, or 4) reference: a site sharing characteristics of the restoration site that will be used to compare with monitoring data."></i></label>
     <div class="controls">
       <select id="field-measurement_stage" name="measurement_stage" data-module="autocomplete" multiple>
         {% for measurement_stage in h.measurement_stages()  %}
@@ -96,7 +123,7 @@
   </div>
   <br>
   <div class="control-group">
-    <label title="The year(s) covered by the data." class="control-label" for="field-reporting_year">{{ _("Reporting Year") }}</label>
+    <label class="control-label" for="field-reporting_year">{{ _("Reporting Year(s)") }}<i class="fa fa-info-circle" title="The year(s) covered by the dataset."></i></label>
     <div class="controls">
       <select id="field-reporting_year" name="reporting_year" data-module="autocomplete" multiple>
         {% for reporting_year in h.reporting_years()  %}
@@ -107,7 +134,7 @@
   </div>
   <br>
   <div class="control-group">
-    <label title="Two digit state codes of State(s) in which data were collected." class="control-label" for="field-state_abbr">{{ _("State Abbreviation)") }}</label>
+    <label class="control-label" for="field-state_abbr">{{ _("States and/or Territories") }}<i class="fa fa-info-circle" title="Two digit state codes of State(s) in which data were collected."></i></label>
     <div class="controls">
       <select id="field-state_abbr" name="state_abbr" data-module="autocomplete" multiple>
         {% for state_abbr in h.state_abbreviations()  %}
@@ -120,7 +147,7 @@
 
   {% block package_basic_fields_tags %}
 {% set tag_attrs = {'data-module': 'autocomplete', 'data-module-tags': '', 'data-module-source': '/api/2/util/tag/autocomplete?incomplete=?'} %}
-{{ form.input('tag_string', id='field-tags', label=_('Optional Tags'), placeholder=_('eg. dam removal, oysters, coral'), value=data.tag_string, error=errors.tags, classes=['control-full'], attrs=tag_attrs) }}
+{{ form.input('tag_string', id='field-tags', label=_('Optional Tags'), placeholder=_('e.g. dam removal, oysters, remote sensing'), value=data.tag_string, error=errors.tags, classes=['control-full'], attrs=tag_attrs) }}
 {% endblock %}
 
 

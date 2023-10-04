@@ -1,6 +1,6 @@
 {% set stats = h.get_site_statistics() %}
 
-<div class="box stats">
+<div class="stats">
   <div class="inner">
     <!-- <h3>{{ _('{0} statistics').format(g.site_title) }}</h3> -->
     <ul>
@@ -8,26 +8,24 @@
       <li>
         <a href="{{ h.url_for(controller='package', action='search') }}">
           <strong>{{ h.SI_number_span(stats.dataset_count) }}</strong><br>
-          {{ _('DATASET') if stats.dataset_count == 1 else _('DATASETS') }}
+          {{ _('Dataset') if stats.dataset_count == 1 else _('Datasets') }}
         </a>
       </li>
       <li>
         <a href="{{ h.url_for(controller='organization', action='index') }}">
           <strong>{{ h.SI_number_span(stats.organization_count) }}</strong><br>
-          {{ _('GRANT') if stats.organization_count == 1 else _('GRANTS') }}
+          {{ _('Grant') if stats.organization_count == 1 else _('Grants') }}
         </a>
       </li>
       <li>
         <a href="{{ h.url_for(controller='group', action='index') }}">
           <strong>{{ h.SI_number_span(stats.group_count) }}</strong><br>
-          {{ _('PROGRAM') if stats.group_count == 1 else _('PROGRAMS') }}
+          {{ _('Program') if stats.group_count == 1 else _('Programs') }}
         </a>
       </li>
       {% endblock %}
     </ul>
-    <div>
-      <h2 class="home_programs_heading_csm">PROGRAM DATASETS</h2>
-      <div class="short_underline_csm"></div>
-    </div>
+
+      
   </div>
 </div>
