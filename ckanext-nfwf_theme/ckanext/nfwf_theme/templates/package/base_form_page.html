@@ -1,0 +1,44 @@
+{% extends "package/edit_base.html" %}
+
+{% block primary_content %}
+  <section class="module">
+    {% block page_header %}{% endblock %}
+    <div class="module-content">
+      {% block primary_content_inner %}
+        {% block form %}
+          {#- passing c to a snippet is bad but is required here
+              for backwards compatibility with old templates and
+              plugins using setup_template_variables() -#}
+          {{- h.snippet(form_snippet, c=c, **form_vars) -}}
+        {% endblock %}
+      {% endblock %}
+    </div>
+  </section>
+{% endblock %}
+
+{% block secondary_content %}
+  {% block info_module %}
+    <section class="module module-narrow module-shallow">
+      <h2 class="module-heading">{{ _('What are datasets?') }}</h2>
+      <div class="module-content">
+        <p>
+          {% trans %}
+          A dataset is a collection of data resources (such as files) and descriptive information available from a single webpage. Datasets are what users see when searching for data. 
+          <br>
+          <br>
+          The Coastal Resilience Open Data Platform is built to allow grantees the flexibility to define datasets for their grants at a level suited to how their data are collected or organized. Generally speaking, a good dataset provides a collection of resources around a theme within your grant. Data are best structured around themes that are easily delineated and searchable.
+          <br>
+          <br>
+          Themes or collections can evolve over time by adding resources to the dataset. For instance, if you have selected to define a dataset around a particular geography, you can add resources to that dataset as you collect more data at that location. In addition, if you are collecting data across multiple years, you can create your initial dataset, add resources over time, and tag the additional years (or other fields) in the metadata.
+
+          {% endtrans %}
+        </p>
+      </div>
+    </section>
+  {% endblock %}
+
+  {% block resources_module %}
+    {# TODO: Pass in a list of previously created resources and the current package dict #}
+    {% snippet "package/snippets/resources.html", pkg={}, action='new_resource' %}
+  {% endblock %}
+{% endblock %}
