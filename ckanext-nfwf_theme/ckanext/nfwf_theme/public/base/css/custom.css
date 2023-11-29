@@ -269,7 +269,7 @@ a:hover, a:focus {
   border-top: 8px;
 }
 
-#abt_logo {
+#iec_logo {
   text-align: right;
 }
 
@@ -527,7 +527,7 @@ a:hover, a:focus {
 
 /* <----------------------------------- media queries ------------------------------------> */
 /* @media (max-width: 977) {
-  #abt_logo {
+  #iec_logo {
     text-align: left;
   }
 } */
@@ -555,8 +555,9 @@ a:hover, a:focus {
 }
 
 @media (max-width: 1180px) {
-  #abt_logo {
+  #iec_logo {
     display: none;
+    background-size: 20px 30px;
   }
 }
 
@@ -570,7 +571,7 @@ a:hover, a:focus {
   .homepage [role="main"] {
     min-height: 565px;
   }
-  #abt_logo {
+  #iec_logo {
     display: none;
   }
 }
