@@ -307,6 +307,15 @@ def restoration_activities():
     except toolkit.ObjectNotFound:
         return None
 
+def test():
+    create_tag_vocabulary(['test'],'test')
+    try:
+        tag_list = toolkit.get_action('tag_list')
+        test = tag_list(data_dict={'vocabulary_id': 'test'})
+        return test
+    except toolkit.ObjectNotFound:
+        return None
+
 class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
     plugins.implements(plugins.IConfigurer)
     plugins.implements(plugins.ITemplateHelpers)
@@ -410,7 +419,10 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
                             toolkit.get_converter('convert_to_tags')('measurement_stages')],
        
             'restoration_activity': [toolkit.get_validator('ignore_missing'),
-                            toolkit.get_converter('convert_to_tags')('restoration_activities')]
+                            toolkit.get_converter('convert_to_tags')('restoration_activities')],
+       
+            'test': [toolkit.get_validator('ignore_missing'),
+                            toolkit.get_converter('convert_to_tags')('test')]
         })
  #       schema['resources'].update({
   #      'custom_resource_text' : [ toolkit.get_validator('ignore_missing') ]
@@ -474,7 +486,10 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
                 toolkit.get_validator('ignore_missing')],
             'restoration_activity': [
                 toolkit.get_converter('convert_from_tags')('restoration_activities'),
-                toolkit.get_validator('ignore_missing')]       
+                toolkit.get_validator('ignore_missing')],
+            'test': [
+                toolkit.get_converter('convert_from_tags')('test'),
+                toolkit.get_validator('ignore_missing')]
         })
 
  #       schema['resources'].update({
@@ -503,6 +518,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
             'state_abbreviations' : state_abbreviations, 
             'measurement_stages' : measurement_stages, 
             'restoration_activities' : restoration_activities,
+            'test' : test,
             'groups_reload' : groups_reload,
             'default_group' : default_group,
             'groups': groups}

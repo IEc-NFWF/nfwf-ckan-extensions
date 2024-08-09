@@ -143,6 +143,16 @@
       </select>
     </div>
   </div>
+  <div class="control-group">
+    <label class="control-label" for="field-test">{{ _("Testy Testy test") }}<i class="fa fa-info-circle" title="Test."></i></label>
+    <div class="controls">
+      <select id="field-test" name="test" data-module="autocomplete" multiple>
+        {% for test in h.test()  %}
+          <option value="{{ test }}" {% if test in data.get('test', []) %}selected="selected"{% endif %}>{{ test }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
   <br>
 
   {% block package_basic_fields_tags %}
