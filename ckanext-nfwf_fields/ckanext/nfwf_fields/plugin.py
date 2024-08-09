@@ -93,6 +93,38 @@ restoration_activity_vocab = [
 
 metric_category_vocab = ['Ecological', 'Socioeconomic']
 
+metric_monitoring_parameter_vocab = [
+    'Acres of oyster reef restored',
+    'Acres restored',
+    'Backshore width',
+    'Beach width',
+    'Coral rugosity/Reef hieght',
+    'Coral species abundance',
+    'Coral survival',
+    'Dune hieght',
+    'Dune volume',
+    'Elevation',
+    'Fish species abundance',
+    'Grain size',
+    'Plant species metrics',
+    'Shoreface',
+    'Shoreline position',
+    'Volume',
+    'Water level'
+]
+
+new_measurement_stage_vocab = [
+    'As Built',
+    'Performance'
+]
+
+additional_optional_measurement_stage_vocab = [
+    'Baseline',
+    'Closed',
+    'Reference',
+    'Long-term'
+]
+
 # from ckan.lib.helpers import unselected_facet_items
 
 # def get_facets_unselected(facet, limit=None):
@@ -316,6 +348,33 @@ def test():
     except toolkit.ObjectNotFound:
         return None
 
+def metric_monitoring_parameters():
+    create_tag_vocabulary(metric_monitoring_parameter_vocab,'metric_monitoring_parameters')
+    try:
+        tag_list = toolkit.get_action('tag_list')
+        metric_monitoring_parameters = tag_list(data_dict={'vocabulary_id': 'metric_monitoring_parameters'})
+        return metric_monitoring_parameters
+    except toolkit.ObjectNotFound:
+        return None
+
+def new_measurement_stages():
+    create_tag_vocabulary(new_measurement_stage_vocab,'new_measurement_stages')
+    try:
+        tag_list = toolkit.get_action('tag_list')
+        new_measurement_stages = tag_list(data_dict={'vocabulary_id': 'new_measurement_stages'})
+        return new_measurement_stages
+    except toolkit.ObjectNotFound:
+        return None
+
+def additional_optional_measurement_stages():
+    create_tag_vocabulary(additional_optional_measurement_stage_vocab,'additional_optional_measurement_stages')
+    try:
+        tag_list = toolkit.get_action('tag_list')
+        additional_optional_measurement_stages = tag_list(data_dict={'vocabulary_id': 'additional_optional_measurement_stages'})
+        return additional_optional_measurement_stages
+    except toolkit.ObjectNotFound:
+        return None
+
 class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
     plugins.implements(plugins.IConfigurer)
     plugins.implements(plugins.ITemplateHelpers)
@@ -422,7 +481,16 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
                             toolkit.get_converter('convert_to_tags')('restoration_activities')],
        
             'test': [toolkit.get_validator('ignore_missing'),
-                            toolkit.get_converter('convert_to_tags')('test')]
+                            toolkit.get_converter('convert_to_tags')('test')],
+       
+            'metric_monitoring_parameter': [toolkit.get_validator('ignore_missing'),
+                            toolkit.get_converter('convert_to_tags')('metric_monitoring_parameter')],
+       
+            'new_measurement_stage': [toolkit.get_validator('ignore_missing'),
+                            toolkit.get_converter('convert_to_tags')('new_measurement_stage')],
+       
+            'additional_optional_measurement_stage': [toolkit.get_validator('ignore_missing'),
+                            toolkit.get_converter('convert_to_tags')('additional_optional_measurement_stage')]
         })
  #       schema['resources'].update({
   #      'custom_resource_text' : [ toolkit.get_validator('ignore_missing') ]
@@ -489,6 +557,15 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
                 toolkit.get_validator('ignore_missing')],
             'test': [
                 toolkit.get_converter('convert_from_tags')('test'),
+                toolkit.get_validator('ignore_missing')],
+            'metric_monitoring_parameter': [
+                toolkit.get_converter('convert_from_tags')('metric_monitoring_parameter'),
+                toolkit.get_validator('ignore_missing')],
+            'new_measurement_stage': [
+                toolkit.get_converter('convert_from_tags')('new_measurement_stage'),
+                toolkit.get_validator('ignore_missing')],
+            'additional_optional_measurement_stage': [
+                toolkit.get_converter('convert_from_tags')('additional_optional_measurement_stage'),
                 toolkit.get_validator('ignore_missing')]
         })
 
@@ -519,6 +596,9 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
             'measurement_stages' : measurement_stages, 
             'restoration_activities' : restoration_activities,
             'test' : test,
+            'metric_monitoring_parameter': metric_monitoring_parameters,
+            'new_measurement_stage': new_measurement_stages,
+            'additional_optional_measurement_stage': additional_optional_measurement_stages,
             'groups_reload' : groups_reload,
             'default_group' : default_group,
             'groups': groups}
