@@ -484,13 +484,13 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
                             toolkit.get_converter('convert_to_tags')('test')],
        
             'metric_monitoring_parameter': [toolkit.get_validator('ignore_missing'),
-                            toolkit.get_converter('convert_to_tags')('metric_monitoring_parameter')],
+                            toolkit.get_converter('convert_to_tags')('metric_monitoring_parameters')],
        
             'new_measurement_stage': [toolkit.get_validator('ignore_missing'),
-                            toolkit.get_converter('convert_to_tags')('new_measurement_stage')],
+                            toolkit.get_converter('convert_to_tags')('new_measurement_stages')],
        
             'additional_optional_measurement_stage': [toolkit.get_validator('ignore_missing'),
-                            toolkit.get_converter('convert_to_tags')('additional_optional_measurement_stage')]
+                            toolkit.get_converter('convert_to_tags')('additional_optional_measurement_stages')]
         })
  #       schema['resources'].update({
   #      'custom_resource_text' : [ toolkit.get_validator('ignore_missing') ]
@@ -559,13 +559,13 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
                 toolkit.get_converter('convert_from_tags')('test'),
                 toolkit.get_validator('ignore_missing')],
             'metric_monitoring_parameter': [
-                toolkit.get_converter('convert_from_tags')('metric_monitoring_parameter'),
+                toolkit.get_converter('convert_from_tags')('metric_monitoring_parameters'),
                 toolkit.get_validator('ignore_missing')],
             'new_measurement_stage': [
-                toolkit.get_converter('convert_from_tags')('new_measurement_stage'),
+                toolkit.get_converter('convert_from_tags')('new_measurement_stages'),
                 toolkit.get_validator('ignore_missing')],
             'additional_optional_measurement_stage': [
-                toolkit.get_converter('convert_from_tags')('additional_optional_measurement_stage'),
+                toolkit.get_converter('convert_from_tags')('additional_optional_measurement_stages'),
                 toolkit.get_validator('ignore_missing')]
         })
 
@@ -596,9 +596,9 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
             'measurement_stages' : measurement_stages, 
             'restoration_activities' : restoration_activities,
             'test' : test,
-            'metric_monitoring_parameter': metric_monitoring_parameters,
-            'new_measurement_stage': new_measurement_stages,
-            'additional_optional_measurement_stage': additional_optional_measurement_stages,
+            'metric_monitoring_parameters': metric_monitoring_parameters,
+            'new_measurement_stages': new_measurement_stages,
+            'additional_optional_measurement_stages': additional_optional_measurement_stages,
             'groups_reload' : groups_reload,
             'default_group' : default_group,
             'groups': groups}

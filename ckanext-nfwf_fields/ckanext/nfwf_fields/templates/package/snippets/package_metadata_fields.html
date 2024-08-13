@@ -102,33 +102,11 @@
   </div>
   <br>
   <div class="control-group">
-    <label class="control-label" for="field-metric_class">{{ _("Metric Classes") }}<i class="fa fa-info-circle" title="Metric classes are broad groupings of associated metrics." ></i></label>
-    <div class="controls">
-      <select id="field-metric_class" name="metric_class" data-module="autocomplete" multiple>
-        {% for metric_class in h.metric_classes()  %}
-          <option value="{{ metric_class }}" {% if metric_class in data.get('metric_class', []) %}selected="selected"{% endif %}>{{ metric_class }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </div>
-  <br>
-  <div class="control-group">
     <label class="control-label" for="field-measurement_stage">{{ _("Measurement Stage(s)") }}<i class="fa fa-info-circle" title="Choose as many as are applicable. Measurement stages include 1) monitoring: data which is being collected for evaluation, 2) baseline: collecting or utilizing previously collected data, 3) control: collecting data from a site where no restoration occurred in addition to the monitoring site, or 4) reference: a site sharing characteristics of the restoration site that will be used to compare with monitoring data."></i></label>
     <div class="controls">
       <select id="field-measurement_stage" name="measurement_stage" data-module="autocomplete" multiple>
         {% for measurement_stage in h.measurement_stages()  %}
           <option value="{{ measurement_stage }}" {% if measurement_stage in data.get('measurement_stage', []) %}selected="selected"{% endif %}>{{ measurement_stage }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </div>
-  <br>
-  <div class="control-group">
-    <label class="control-label" for="field-reporting_year">{{ _("Reporting Year(s)") }}<i class="fa fa-info-circle" title="The year(s) covered by the dataset."></i></label>
-    <div class="controls">
-      <select id="field-reporting_year" name="reporting_year" data-module="autocomplete" multiple>
-        {% for reporting_year in h.reporting_years()  %}
-          <option value="{{ reporting_year }}" {% if reporting_year in data.get('reporting_year', []) %}selected="selected"{% endif %}>{{ reporting_year }}</option>
         {% endfor %}
       </select>
     </div>
@@ -144,6 +122,7 @@
       </select>
     </div>
   </div>
+  <br>
   <div class="control-group">
     <label class="control-label" for="field-test">{{ _("Testy Testy test") }}<i class="fa fa-info-circle" title="Test."></i></label>
     <div class="controls">
@@ -155,6 +134,69 @@
     </div>
   </div>
   <br>
+
+  
+
+<div class="control-group">
+  <label class="control-label" for="field-metric_monitoring_parameter">{{ _("Grant-Required Metrics") }}<i class="fa fa-info-circle" title="Choose as many as are applicable. Measurement stages include 1) monitoring: data which is being collected for evaluation, 2) baseline: collecting or utilizing previously collected data, 3) control: collecting data from a site where no restoration occurred in addition to the monitoring site, or 4) reference: a site sharing characteristics of the restoration site that will be used to compare with monitoring data."></i></label>
+  <div class="controls">
+    <select id="field-metric_monitoring_parameter" name="metric_monitoring_parameter" data-module="autocomplete" multiple>
+      {% for metric_monitoring_parameter in h.metric_monitoring_parameters()  %}
+        <option value="{{ metric_monitoring_parameter }}" {% if metric_monitoring_parameter in data.get('metric_monitoring_parameter', []) %}selected="selected"{% endif %}>{{ metric_monitoring_parameter }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+<br>
+
+<div class="control-group">
+  <label class="control-label" for="field-new_measurement_stage">{{ _("Grant-Required Measurement Stage") }}<i class="fa fa-info-circle" title="Choose as many as are applicable. Measurement stages include 1) monitoring: data which is being collected for evaluation, 2) baseline: collecting or utilizing previously collected data, 3) control: collecting data from a site where no restoration occurred in addition to the monitoring site, or 4) reference: a site sharing characteristics of the restoration site that will be used to compare with monitoring data."></i></label>
+  <div class="controls">
+    <select id="field-new_measurement_stage" name="new_measurement_stage" data-module="autocomplete" multiple>
+      {% for new_measurement_stage in h.new_measurement_stages()  %}
+        <option value="{{ new_measurement_stage }}" {% if new_measurement_stage in data.get('new_measurement_stage', []) %}selected="selected"{% endif %}>{{ new_measurement_stage }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+<br>
+
+<div class="control-group">
+  <label class="control-label" for="field-metric_class">{{ _("Additional Optional Metrics") }}<i class="fa fa-info-circle" title="Metric classes are broad groupings of associated metrics." ></i></label>
+  <div class="controls">
+    <select id="field-metric_class" name="metric_class" data-module="autocomplete" multiple>
+      {% for metric_class in h.metric_classes()  %}
+        <option value="{{ metric_class }}" {% if metric_class in data.get('metric_class', []) %}selected="selected"{% endif %}>{{ metric_class }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+<br>
+
+<div class="control-group">
+  <label class="control-label" for="field-additional_optional_measurement_stage">{{ _("Additional Optional Measurement Stage") }}<i class="fa fa-info-circle" title="Metric classes are broad groupings of associated metrics." ></i></label>
+  <div class="controls">
+    <select id="field-additional_optional_measurement_stage" name="additional_optional_measurement_stage" data-module="autocomplete" multiple>
+      {% for additional_optional_measurement_stage in h.additional_optional_measurement_stages()  %}
+        <option value="{{ additional_optional_measurement_stage }}" {% if additional_optional_measurement_stage in data.get('additional_optional_measurement_stage', []) %}selected="selected"{% endif %}>{{ additional_optional_measurement_stage }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+<br>
+
+<div class="control-group">
+  <label class="control-label" for="field-reporting_year">{{ _("Reporting Year(s)") }}<i class="fa fa-info-circle" title="The year(s) covered by the dataset."></i></label>
+  <div class="controls">
+    <select id="field-reporting_year" name="reporting_year" data-module="autocomplete" multiple>
+      {% for reporting_year in h.reporting_years()  %}
+        <option value="{{ reporting_year }}" {% if reporting_year in data.get('reporting_year', []) %}selected="selected"{% endif %}>{{ reporting_year }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+<br>
+
 
   {% block package_basic_fields_tags %}
 {% set tag_attrs = {'data-module': 'autocomplete', 'data-module-tags': '', 'data-module-source': '/api/2/util/tag/autocomplete?incomplete=?'} %}
