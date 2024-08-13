@@ -7,6 +7,8 @@
 
 {% block package_metadata_fields %}
 
+<h2>Data Labels</h2>
+
 {% set groups_available = h.groups_available(am_member=True) %}
 {% set user_is_sysadmin = h.check_access('sysadmin') %}
 {% set show_groups_selector = groups_available %}
@@ -86,7 +88,6 @@
 </div>
 <br>
 
-<h2>Data Labels</h2>
   <div class="control-group">
     <span title="This field is required" class="control-required">*</span>
     <label class="control-label" for="field-metric_category">{{ _("Metric Category") }}<i class="fa fa-info-circle" title="The category of metric outcomes for which the data are collected." ></i></label>
