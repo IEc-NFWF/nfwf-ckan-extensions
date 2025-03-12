@@ -196,7 +196,7 @@ a:hover, a:focus {
   border-top: 8px;
 }
 
-#abt_logo {
+#iec_logo {
   text-align: right;
 }
 
@@ -408,7 +408,7 @@ a:hover, a:focus {
 
 /* <----------------------------------- media queries ------------------------------------> */
 /* @media (max-width: 977) {
-  #abt_logo {
+  #iec_logo {
     text-align: left;
   }
 } */
@@ -435,6 +435,13 @@ a:hover, a:focus {
   }
 }
 
+@media (max-width: 1180px) {
+  #iec_logo {
+    display: none;
+    background-size: 20px 30px;
+  }
+}
+
 @media (max-width: 1172px) {
   .homepage [role="main"] {
     min-height: 500px;
@@ -444,6 +451,9 @@ a:hover, a:focus {
 @media (max-width: 991px) {
   .homepage [role="main"] {
     min-height: 550px;
+  }
+  #iec_logo {
+    display: none;
   }
 }
 
