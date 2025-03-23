@@ -16,9 +16,9 @@
 {% endblock %}
 
 {% block content_primary_nav %}
-  {{ h.build_nav_icon('dataset_read', _('Dataset'), id=pkg.name) }}
-  <!-- {{ h.build_nav_icon('dataset_groups', _('Groups'), id=pkg.name) }} -->
-  {{ h.build_nav_icon('dataset_activity', _('Activity Stream'), id=pkg.name) }}
+  {{ h.build_nav_icon('dataset.read', _('Dataset'), id=pkg.name) }}
+  <!-- {{ h.build_nav_icon('dataset.groups', _('Groups'), id=pkg.name) }} -->
+  {{ h.build_nav_icon('activity.dataset_activity', _('Activity Stream'), id=pkg.name) }}
 {% endblock %}
 
 {% block primary_content_inner %}
