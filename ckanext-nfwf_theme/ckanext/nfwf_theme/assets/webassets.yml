@@ -1,0 +1,5 @@
+nfwf_theme:
+  output: css/nfwf_theme.css
+  contents:
+    - css/nfwfmain.css
+    - css/custom.css
