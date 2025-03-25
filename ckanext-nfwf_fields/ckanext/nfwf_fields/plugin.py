@@ -2,7 +2,7 @@ import ckan.plugins as plugins
 import ckan.plugins.toolkit as toolkit
 import ckan.lib.helpers as helpers
 import ckan.model as model
-from ckan.common import  (c, request)
+from flask import request
 
 
 ## Currently storing in code, switch to using configuration file
@@ -307,6 +307,23 @@ def restoration_activities():
     except toolkit.ObjectNotFound:
         return None
 
+def debug_helper_exists():
+    return True
+
+def debug_template_vars():
+    context = {}
+    for key in dir(toolkit.g):
+        if not key.startswith('_'):
+            context[key] = getattr(toolkit.g, key)
+    return context
+
+def dump(obj):
+    import json
+    try:
+        return json.dumps(obj, indent=2)
+    except:
+        return str(obj)
+
 class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
     plugins.implements(plugins.IConfigurer)
     plugins.implements(plugins.ITemplateHelpers)
@@ -505,7 +522,11 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
             'restoration_activities' : restoration_activities,
             'groups_reload' : groups_reload,
             'default_group' : default_group,
-            'groups': groups}
+            'groups': groups,
+            'debug_helper_exists': debug_helper_exists,
+            'debug_template_vars': debug_template_vars,
+            'dump': dump
+            }
 
     # IConfigurer
 

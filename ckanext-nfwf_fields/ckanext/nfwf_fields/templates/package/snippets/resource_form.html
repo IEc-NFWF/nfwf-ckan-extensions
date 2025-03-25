@@ -2,11 +2,25 @@
 
 {% set data = data or {} %}
 {% set errors = errors or {} %}
-{% set action = form_action or h.url_for(controller='dataset', action='new_resource', id=pkg_name) %}
 
+{% if form_action %}
+  {% set action = form_action %}
+{% else %}
+  {% if pkg_name %}
+    {# Creating a new resource for an existing dataset #}
+    {% set action = h.url_for('dataset_resource.new', id=pkg_name) %}
+  {% else %}
+    {# We're either creating a resource for a new dataset, or editing an existing resource #}
+    {% if data.id %}
+      {% set action = h.url_for('dataset_resource.edit', id=data.package_id, resource_id=data.id) %}
+    {% else %}
+      {# This should happen very rarely, if ever #}
+      {% set action = h.url_for('dataset.resources', id=data.package_id) %}
+    {% endif %}
+  {% endif %}
+{% endif %}
 
 <form id="resource-edit" class="dataset-form dataset-resource-form" method="post" action="{{ action }}" data-module="basic-form resource-form" enctype="multipart/form-data">
-
   {% block stages %}
     {# An empty stages variable will not show the stages #}
     {% if stage %}
@@ -21,9 +35,15 @@
   {% block basic_fields %}
     {% block basic_fields_url %}
       {% set is_upload = (data.url_type == 'upload') %}
-      {{ form.image_upload(data, errors, field_url='url', field_upload='upload', field_clear='clear_upload',
-         is_upload_enabled=h.uploads_enabled(), is_url=data.url and not is_upload, is_upload=is_upload,
-         upload_label=_('Data'), url_label=_('URL'), placeholder=_('http://example.com/external-data.csv'), field_name='name') }}
+      {% snippet 'package/snippets/resource_upload_field.html',
+        data=data,
+        errors=errors,
+        is_url=data.url and not is_upload,
+        is_upload=is_upload,
+        is_upload_enabled=h.uploads_enabled(),
+        url_label=_('URL'),
+        upload_label=_('File'),
+        placeholder=_('http://example.com/external-data.csv') %}
     {% endblock %}
 
     {% block basic_fields_name %}

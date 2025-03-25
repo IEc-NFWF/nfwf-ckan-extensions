@@ -56,7 +56,7 @@
                 </h2>
               {% endblock %}
               {% block facet_list_items %}
-                {% with items = h.get_facet_items_dict(name) or items %}
+                {% with items = items or h.get_facet_items_dict(name) %}
                 {% if items %}
                   <nav>
                     <ul class="{{ nav_class or 'list-unstyled nav nav-simple nav-facet' }}">
