@@ -323,6 +323,38 @@ def dump(obj):
         return json.dumps(obj, indent=2)
     except:
         return str(obj)
+    
+def custom_get_facet_items_dict(facet, search_facets=None, limit=None, exclude_active=False):
+    """Modified version of get_facet_items_dict that works with CKAN 2.11"""
+    
+    # Get search_facets from global g object if not provided
+    if not search_facets and hasattr(toolkit.g, 'search_facets'):
+        search_facets = toolkit.g.search_facets
+    
+    if not search_facets or not isinstance(search_facets, dict) or not search_facets.get(facet, {}).get('items'):
+        return []
+    
+    facets = []
+    for facet_item in search_facets[facet]['items']:
+        if not len(facet_item['name'].strip()):
+            continue
+        
+        # Check if this facet is in the request
+        is_active = facet in request.args and facet_item['name'] in request.args.getlist(facet)
+        
+        if not is_active:
+            facets.append(dict(active=False, **facet_item))
+        elif not exclude_active:
+            facets.append(dict(active=True, **facet_item))
+    
+    # Sort by count (descending) and display name (ascending)
+    facets.sort(key=lambda it: (-it['count'], it['display_name'].lower()))
+    
+    # Apply limit if specified
+    if limit is not None and limit > 0:
+        return facets[:limit]
+    
+    return facets
 
 class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
     plugins.implements(plugins.IConfigurer)
@@ -525,7 +557,8 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
             'groups': groups,
             'debug_helper_exists': debug_helper_exists,
             'debug_template_vars': debug_template_vars,
-            'dump': dump
+            'dump': dump,
+            'custom_get_facet_items_dict': custom_get_facet_items_dict
             }
 
     # IConfigurer
