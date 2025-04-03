@@ -24,6 +24,9 @@
 {% endblock %}
 
 {% block links %}
-  {{ super() }}
-  {% include "organization/snippets/feeds.html" %}
+  {% if organization %}
+    {% snippet 'organization/snippets/feeds.html', group_dict=organization %}
+  {% else %}
+    {{ super() }}
+  {% endif %}
 {% endblock %}

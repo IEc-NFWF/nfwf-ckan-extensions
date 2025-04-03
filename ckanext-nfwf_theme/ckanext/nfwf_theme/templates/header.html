@@ -29,12 +29,12 @@
           </a>
         </li>
         {% block header_account_settings_link %}
-        <li>
+        <!-- <li>
           <a href="{{ h.url_for('user.edit', id=c.userobj.name) }}" title="{{ _('Edit settings') }}">
             <i class="fa fa-cog" aria-hidden="true"></i>
             <span class="text">{{ _('Settings') }}</span>
           </a>
-        </li>
+        </li> -->
         {% endblock %} {% block header_account_log_out_link %}
         <li>
           <a href="{{ h.url_for('/user/_logout') }}" title="{{ _('Log out') }}">
