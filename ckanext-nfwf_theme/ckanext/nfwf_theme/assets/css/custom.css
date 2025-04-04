@@ -733,3 +733,11 @@ a:hover, a:focus {
     padding: 20px 0 20px 0;
   }
 }
+
+.select2-container {
+  width: 100% !important;
+}
+.select2-container-multi .select2-choices {
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}

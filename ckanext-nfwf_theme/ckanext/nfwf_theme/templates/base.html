@@ -15,7 +15,27 @@ gtag('config', 'UA-172162518-1');
 
   {% asset 'nfwf_theme/nfwf_theme' %}
 
+  <!-- Extra link and script to help render select2 -->
+  <link rel="stylesheet" href="{{ h.url_for_static('/base/vendor/select2/select2.css') }}">
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Wait for jQuery and select2 to load
+      var checkExists = setInterval(function() {
+        if (window.jQuery && jQuery.fn.select2) {
+          clearInterval(checkExists);
+          
+          // Initialize all multiple select elements
+          jQuery('select[multiple]').each(function() {
+            if (!jQuery(this).hasClass('select2-hidden-accessible')) {
+              jQuery(this).select2({
+                width: '100%',
+                placeholder: 'Select options...',
+                allowClear: true
+              });
+            }
+          });
+        }
+      }, 100); // check every 100ms
+    });
+  </script>
 {% endblock %}
-
-
-

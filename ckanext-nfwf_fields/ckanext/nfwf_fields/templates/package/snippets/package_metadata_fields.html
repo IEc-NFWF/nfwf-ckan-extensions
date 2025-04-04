@@ -63,7 +63,7 @@
 <div class="control-group">
   <label class="control-label" for="field-resilience_grant">{{ _("Resilience Grant(s)") }}<i class="fa fa-info-circle" title="The resilience grant ID assigned to the restoration project where monitoring is taking place."></i></label>
   <div class="controls">
-    <select id="field-resilience_grant" name="resilience_grant" data-module="autocomplete" multiple>
+    <select id="field-resilience_grant" name="resilience_grant" data-module="select2 autocomplete" multiple="multiple">
       {% for resilience_grant in h.resilience_grants()  %}
         <option value="{{ resilience_grant }}" {% if resilience_grant in data.get('resilience_grant', []) %}selected="selected"{% endif %}>{{ resilience_grant }}</option>
       {% endfor %}
