@@ -8087,41 +8087,6 @@ html {
     background-color:#faedcf;
     margin-right:3px
   }
-  /* Fix resource upload field display issues */
-.resource-upload-field {
-  position: relative;
-  overflow: visible;
-  display: block;
-}
-
-.resource-upload-field input[type="file"] {
-  /* Reset problematic styles */
-  opacity: 1 !important;
-  position: static !important;
-  z-index: auto !important;
-  margin: 0 !important;
-  border: none !important;
-  transform: none !important;
-  -moz-transform: none !important;
-  width: 100% !important;
-}
-
-/* Fix button styling */
-.resource-upload-field .btn {
-  margin-right: 5px;
-}
-
-/* Ensure proper spacing */
-.select-type {
-  margin-bottom: 10px;
-}
-
-/* Make radio buttons work properly */
-.resource-upload-field input[type="radio"] {
-  /* Keep radios hidden but functional */
-  position: absolute;
-  opacity: 0;
-}
 
 /* Ensure all control sections are properly spaced */
 .upload-type, .select-type > div.controls {

@@ -833,3 +833,63 @@ a:hover, a:focus {
 .resource-item .handle {
   display: none;
 }
+
+.resource-upload-field > input[type=radio] {
+  display: none;
+}
+.resource-upload-field > div.select-type {
+  position: relative;
+  display: none;
+}
+.resource-upload-field > input[type=radio]:checked + div.select-type {
+  display: block;
+}
+.resource-upload-field label.btn::after {
+  content: "";
+}
+.resource-upload-field .btn-remove-url {
+  position: absolute;
+  margin-right: 5px;
+  margin-top: 15px;
+  top: 1.5rem;
+  right: 0.25rem;
+  padding: 0 12px;
+  border-radius: 100px;
+}
+.resource-upload-field .btn-remove-url .icon-remove {
+  margin-right: 0;
+}
+.resource-upload-field input#field-clear-upload {
+  display: none;
+}
+.resource-upload-field input#field-clear-upload + div.upload-type {
+  display: block;
+}
+.resource-upload-field input#field-clear-upload ~ .upload-type {
+  display: none;
+}
+.resource-upload-field input#field-clear-upload:checked + div.upload-type {
+  display: none;
+}
+.resource-upload-field input#field-clear-upload:checked ~ .upload-type {
+  display: block;
+}
+
+.js .image-upload .btn-remove-url {
+  position: absolute;
+  margin-top: 2px;
+  margin-right: 5px;
+  top: 0.3rem;
+  right: 0.25rem;
+  padding: 0 12px;
+  border-radius: 100px;
+}
+.js .image-upload .btn-remove-url .icon-remove {
+  margin-right: 0;
+}
+.js .image-upload .error-inline {
+  margin-top: 5px;
+  margin-left: 2px;
+  font-weight: bold;
+}
+
