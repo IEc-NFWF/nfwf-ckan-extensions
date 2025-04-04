@@ -5,7 +5,7 @@
 {% block subtitle %}{{ group_dict.display_name }} - {{ _('Grants') }}{% endblock %}
 
 {% block breadcrumb_content %}
-  <li>{% link_for _('Grants'), controller='organization', action='index', named_route=group_type + '.index' %}</li>
+  <li>{% link_for _('Grants'), controller='organization', action='index', named_route=group_type + '_index' %}</li>
   {% block breadcrumb_content_inner %}
     <li>{% link_for organization.display_name|truncate(35), controller='organization', id=organization.name, named_route=group_type + '.read' %}</li>
     <li class="active">{% link_for _('Manage'), controller='organization', action='edit', id=organization.name, named_route=group_type + '.edit' %}</li>
@@ -14,7 +14,7 @@
 
 {% block content_action %}
   {% if organization and h.check_access('organization_update', {'id': organization.id}) %}
-    {% link_for _('View'), controller='organization', id=organization.name, class_='btn btn-default', icon='eye', named_route=group_type + '.read' %}
+    {% link_for _('View'), id=organization.name, class_='btn btn-default', icon='eye', named_route=group_type + '.read' %}
   {% endif %}
 {% endblock %}
 
