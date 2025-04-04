@@ -3,21 +3,21 @@
 {% block styles %}
   {{ super() }}
   
-<!-- Global site tag (gtag.js) - Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172162518-1"></script>
-<script>
-window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=UA-172162518-1"></script>
+  <script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
 
-gtag('config', 'UA-172162518-1');
-</script>
+  gtag('config', 'UA-172162518-1');
+  </script>
 
   {% asset 'nfwf_theme/nfwf_theme' %}
 
-  <!-- Extra link and script to help render select2 -->
+  <!-- Extra link and script to help render select2 and other modules -->
   <link rel="stylesheet" href="{{ h.url_for_static('/base/vendor/select2/select2.css') }}">
-  <script>
+  <script async>
     document.addEventListener('DOMContentLoaded', function() {
       // Wait for jQuery and select2 to load
       var checkExists = setInterval(function() {
@@ -36,6 +36,15 @@ gtag('config', 'UA-172162518-1');
           });
         }
       }, 100); // check every 100ms
+
+      if (window.ckan && window.jQuery) {        
+        // Initialize JavaScript modules
+        if (ckan.module && typeof ckan.module.initialize === 'function' && ckan.module.instances.length < 1) {
+          console.log('Calling ckan.module.initialize()');
+          ckan.module.initialize();
+        }
+      }
+
     });
   </script>
 {% endblock %}

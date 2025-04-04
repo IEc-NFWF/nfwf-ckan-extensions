@@ -741,3 +741,95 @@ a:hover, a:focus {
   border: 1px solid #ccc;
   border-radius: 3px;
 }
+
+/* Styling for dropdown to the right of resources in manage/edit mode */
+.nav-item .dropdown {
+  display: none;
+}
+
+.resource-list {
+  margin: 0;
+  list-style: none;
+  padding-left: 0;
+  margin: -10px -10px 10px -10px;
+}
+
+.resource-item {
+  position: relative;
+  padding: 10px 10px 10px 60px;
+  margin-bottom: 0px;
+  border-radius: 3px;
+}
+.resource-item:hover {
+  background-color: #eee;
+}
+
+.resource-item .heading {
+  color: #000;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.resource-item .format-label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+}
+
+.resource-item .description {
+  font-size: 12px;
+  margin-bottom: 0;
+  min-height: 12px;
+}
+
+.resource-item .btn-group {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+@media (max-width: 575.98px) {
+  .resource-item .btn-group {
+    display: none;
+  }
+}
+.resource-list.reordering .resource-item {
+  border: 1px solid #ddd;
+  margin-bottom: 10px;
+  cursor: move;
+}
+.resource-list.reordering .resource-item .handle {
+  display: block;
+  position: absolute;
+  color: #888;
+  left: -31px;
+  top: 50%;
+  margin-top: -15px;
+  width: 30px;
+  height: 30px;
+  line-height: 30px;
+  text-align: center;
+  border: 1px solid #ddd;
+  border-width: 1px 0 1px 1px;
+  background-color: #fff;
+  border-radius: 20px 0 0 20px;
+}
+.resource-list.reordering .resource-item .handle:hover {
+  text-decoration: none;
+}
+.resource-list.reordering .resource-item:hover .handle {
+  background-color: #eee;
+}
+.resource-list.reordering .resource-item.ui-sortable-helper {
+  background-color: #eee;
+  border: 1px solid #187794;
+}
+.resource-list.reordering .resource-item.ui-sortable-helper .handle {
+  background-color: #eee;
+  border-color: #187794;
+  color: #333;
+}
+
+.resource-item .handle {
+  display: none;
+}
