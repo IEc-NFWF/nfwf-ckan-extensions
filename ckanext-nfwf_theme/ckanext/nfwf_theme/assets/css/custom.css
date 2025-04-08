@@ -974,3 +974,13 @@ a:hover, a:focus {
   position: relative;
   top: -1px;
 }
+
+.actions {
+  padding-top: 5px;
+  padding-right: 10px;
+}
+
+/* Hide the DataStore tab in edit resource */
+.nav-tabs li a[href*="resource_data"] {
+  display: none;
+}
