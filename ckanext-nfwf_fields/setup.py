@@ -81,6 +81,7 @@ setup(
     entry_points='''
         [ckan.plugins]
         nfwf_fields=ckanext.nfwf_fields.plugin:Nfwf_FieldsPlugin
+        nfwf_org_fields=ckanext.nfwf_fields.plugin:Nfwf_Org_FieldsPlugin
 
         [babel.extractors]
         ckan = ckan.lib.extract:extract_ckan

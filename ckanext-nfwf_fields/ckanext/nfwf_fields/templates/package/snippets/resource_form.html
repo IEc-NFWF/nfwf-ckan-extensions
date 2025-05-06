@@ -20,6 +20,8 @@
   {% endif %}
 {% endif %}
 
+{% set package_id = data.package_id or action.split('/')[2] %}
+
 <form id="resource-edit" class="dataset-form dataset-resource-form" method="post" action="{{ action }}" data-module="basic-form resource-form" enctype="multipart/form-data">
   {{ h.csrf_input() }}
   {% block stages %}
@@ -34,6 +36,11 @@
   <input name="id" value="{{ data.id }}" type="hidden"/>
 
   {% block basic_fields %}
+    {{package_id}}<br/>
+    {{data}}
+    <h2>Resource Information</h2>
+    <div>Tip: Click here for <a href="">more information</a> on grant requirements. When uploading a resource, the predefined templates from the <a href="">Open Data Repository's Resources page</a> are preferred.</div><br/>
+
     {% block basic_fields_url %}
       {% set is_upload = (data.url_type == 'upload') %}
       {% snippet 'package/snippets/resource_upload_field.html',
@@ -64,6 +71,59 @@
         </span>
       {% endcall %}
     {% endblock %}
+
+    <div class="control-group">
+      <span title="This field is required" class="control-required">*</span>
+      <label class="control-label" for="field-doc_type">{{ _("File / Document Type") }}</label>
+      <div class="controls">
+        <select id="field-doc_type" name="doc_type" data-module="autocomplete">
+          {% if h.doc_types()|length > 1 %}
+            <option value="">--Please choose an option--</option>
+            {% endif %}
+            {% for doc_type in h.doc_types() %}
+            <option value="{{ doc_type }}" 
+              {% if data.get('doc_type') and data.get('doc_type')==doc_type %}
+                selected="selected"
+              {% endif %}>
+              {{ doc_type }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <br/>
+
+    {% set satisfied_metrics = h.get_satisfied_metrics(package_id)  %}
+    {% set nbs = h.get_nbs_from_package_id(package_id) %}
+    {% set mon_param_options = h.get_mon_param_options_by_nbs(nbs) %}
+    {% if mon_param_options|length > 0 %}
+      <h2>Data Labels</h2>
+      <div>
+        <p>These are your Grant-required metrics for your nature-based solution(s). A <i class="fa fa-check" style="color: green"></i> indicates metric data has been submitted.</p>
+        <p>{{nbs}} Required Metrics:</p>
+        <ul style="list-style-type:none;">
+          {% for metric in h.get_mon_param_options_by_nbs(nbs) %}
+          <li><i {% if metric in satisfied_metrics %}class="fa fa-check"{% else %}class="fa fa-fw"{% endif %} style="color: green; width: 20px"></i> {{metric}}</li>
+          {% endfor %}
+        </ul>
+        <p><b>Note:</b> Metrics are required to be monitored at the time construction is completed (as-built) and again one-year post-construction (performance); additional monitoring timepoints are encouraged</p>
+        <div class="control-group">
+          <label class="control-label" for="field-metric">{{ _("Metric(s)") }}</label>
+          <div class="controls">
+            <select id="field-metric" name="metric" data-module="autocomplete" multiple>
+                {% for metric in h.get_mon_param_options_by_nbs(nbs) %}
+                <option value="{{ metric }}" {% if data.get('metric') and (metric in data.get('metric', [])) %}selected="selected"{% endif %}>
+                  {{ metric }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <br/>
+    </div>
+    {% endif %}
+    <br/>
+
   {% endblock basic_fields %}
 
   {% block metadata_fields %}
