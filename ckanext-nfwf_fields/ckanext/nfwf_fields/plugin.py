@@ -629,10 +629,10 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
 
     def _modify_package_schema(self, schema):
         schema.update({
-            'principal_investigator': [toolkit.get_validator('not_empty'),
+            'principal_investigator': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_extras')],
 
-            'point_of_contact_email': [toolkit.get_validator('not_empty'),
+            'point_of_contact_email': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_extras'),toolkit.get_validator('email_validator')],
 
             'point_of_contact_phone': [toolkit.get_validator('ignore_missing'),
@@ -695,7 +695,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         cast(Schema, schema['resources']).update({
                 'metric': [toolkit.get_validator('ignore_missing'),
                         toolkit.get_converter('convert_to_list_if_string')],
-                'doc_type': [toolkit.get_validator('not_empty')]
+                'doc_type': [toolkit.get_validator('ignore_missing')]
                 })
         return schema
     
@@ -754,13 +754,13 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
                 toolkit.get_validator('ignore_missing')],
             'grant_cycle': [
                 toolkit.get_converter('convert_from_tags')('grant_cycles'),
-                toolkit.get_validator('not_empty')],
+                toolkit.get_validator('ignore_missing')],
             'pipeline_stage': [
                 toolkit.get_converter('convert_from_tags')('pipeline_stages'),
-                toolkit.get_validator('not_empty')],
+                toolkit.get_validator('ignore_missing')],
             'nature_based_solution': [
                 toolkit.get_converter('convert_from_tags')('nature_based_solutions'),
-                toolkit.get_validator('not_empty')],
+                toolkit.get_validator('ignore_missing')],
             'grant_status': [
                 toolkit.get_converter('convert_from_tags')('grant_statuses'),
                 toolkit.get_validator('ignore_missing')]
@@ -769,7 +769,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         cast(Schema, schema['resources']).update({
                 'metric': [toolkit.get_validator('ignore_missing'),
                         toolkit.get_converter('convert_to_list_if_string')],
-                'doc_type': [toolkit.get_validator('not_empty')]
+                'doc_type': [toolkit.get_validator('ignore_missing')]
                 })
         return schema
 
@@ -878,13 +878,13 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
         
     def _modify_group_schema(self, schema):
         schema.update({
-            'grant_cycle': [toolkit.get_validator('not_empty'),
+            'grant_cycle': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_extras')],
             'owner_group': [toolkit.get_converter('convert_to_extras'),
-                              toolkit.get_validator('not_empty')],
-            'pipeline_stage': [toolkit.get_validator('not_empty'),
+                              toolkit.get_validator('ignore_missing')],
+            'pipeline_stage': [toolkit.get_validator('ignore_missing'),
                               toolkit.get_converter('convert_to_extras')],
-            'nature_based': [toolkit.get_validator('not_empty'),
+            'nature_based': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_extras')],
             'metric_category': [toolkit.get_validator('ignore_missing'),
                                toolkit.get_converter('convert_to_extras')],
