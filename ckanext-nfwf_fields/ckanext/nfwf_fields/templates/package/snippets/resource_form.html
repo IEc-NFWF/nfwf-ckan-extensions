@@ -53,7 +53,7 @@
     {% endblock %}
 
     {% block basic_fields_name %}
-      {{ form.input('name', id='field-name', label=_('Name'), placeholder=_(''), value=data.name, error=errors.name, classes=['control-full']) }}
+      {{ form.input('name', id='field-name', label=_('Name'), placeholder=_(''), value=data.name, error=errors.name, classes=['control-full'], is_required=true) }}
     {% endblock %}
 
     {% block basic_fields_description %}
