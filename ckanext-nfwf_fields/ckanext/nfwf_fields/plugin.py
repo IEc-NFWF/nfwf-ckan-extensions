@@ -104,7 +104,7 @@ restoration_activity_vocab = [
 metric_category_vocab = ['Ecological', 'Socioeconomic']
 nature_based_solution_vocab = [
     "Aquatic Connectivity",
-    "Beach or Dune or Barrier Island Restoration",
+    "Beach Dune or Barrier Island Restoration",
     "Coastal Forest Restoration",
     "Community Resilience Planning",
     "Coral Reef Restoration",
@@ -120,21 +120,21 @@ nature_based_solution_vocab = [
     "Stream Restoration",
     "Wildfire Prevention"
 ]
-monitoring_parameter_vocab = [
+monitoring_parameter_vocab = [ # if you change this, make sure to update 'nbs_monitoring'
     "Acres Restored",
     "Avian Abundance",
     "Beach-Dune Geomorphology",
     "Coral Abundance",
     "Elevation",
     "Fish Abundance",
-    "Rugosity/Reef Height",
+    "Rugosity or Reef Height",
     "Shoreline Position",
     "Survival",
     "Vegetation",
     "Water Level",
     "Water Quality"
 ]
-grant_cycle_vocab = ['grant cycle test 1', 'grant cycle test 2']
+grant_cycle_vocab = [str(year) for year in range(2015, 2031)]
 pipeline_stage_vocab = [
     'Planning',
     'Preliminary Design',
@@ -158,12 +158,12 @@ doc_type_vocab = [
     'Resilience or Hazard Management Plan',
     'Plan (Other)'
 ]
-nbs_monitoring = {
+nbs_monitoring = { # if you change this, make sure to update 'monitoring_parameter_vocab'
     "Aquatic Connectivity": [],
     "Beach, Dune, Barrier Island Restoration": ["Shoreline Position", "Beach-Dune Geomorphology"],
     "Coastal Forest Restoration": [],
     "Community Resilience Planning": [],
-    "Coral Reef Restoration": ["Acres Restored", "Coral Abundance", "Survival", "Rugosity/Reef Height", "Fish Abundance"],
+    "Coral Reef Restoration": ["Acres Restored", "Coral Abundance", "Survival", "Rugosity or Reef Height", "Fish Abundance"],
     "Easements and Acquisitions": [],
     "Floodplain Restoration": ["Vegetation", "Elevation", "Water Level"],
     "Green Stormwater Infrastructure": [],
@@ -444,17 +444,36 @@ def monitoring_parameters():
     except toolkit.ObjectNotFound:
         return None
 
-def get_mon_param_options_by_nbs(nbs_type):
-    return nbs_monitoring.get(nbs_type)
+def get_grant_required_metrics_by_nbs(nbs_type_list):
+    grant_required_metrics = []
+    if nbs_type_list is not None:
+        for nbs_type in nbs_type_list:
+            metrics = nbs_monitoring.get(nbs_type)
+            if metrics is not None:
+                grant_required_metrics += metrics
+    else:
+        return []
+    return list(set(grant_required_metrics))
 
 def get_satisfied_metrics(package_id):
     package = toolkit.get_action('package_show')(data_dict={'id': package_id})
+    org_id = package.get('owner_org')
     metrics = []
-    for resource in package.get('resources'):
-        metric = resource.get('metric')
-        if metric:
-            metrics += metric
-    return metrics
+    if org_id:
+        org_packages = toolkit.get_action('package_search')(data_dict={
+            'q': f"owner_org:{org_id}",
+            'rows': 1000,
+            'include_private': True
+            })
+        if org_packages and org_packages.get('count') > 0:
+            for package in org_packages.get('results'):
+                if package.get('resources'):
+                    for resource in package.get('resources'):
+                        if (resource.get('doc_type') and resource.get('doc_type') == 'Monitoring Data'):
+                            metric = resource.get('metric')
+                            if metric:
+                                metrics += metric
+    return list(set(metrics))
 
 def get_nbs_from_package_id(package_id):
     package = toolkit.get_action('package_show')(data_dict={'id': package_id})
@@ -463,7 +482,7 @@ def get_nbs_from_package_id(package_id):
         org = toolkit.get_action('organization_show')(data_dict={'id': org_id})
         if (org.get('extras')):
             return get_extra(org.get('extras'), 'nature_based')
-    return None
+    return []
 
 
 def restoration_activities():
@@ -487,19 +506,52 @@ def restoration_activities():
 def extras_has_value(extras_list, key, value):
     if extras_list:
         for extra in extras_list:
-            if extra.get('key') == key and extra.get('value') == value:
-                return True
+            parsed_key = extra.get('key')
+            if extra.get('value'):
+                parsed_value = parse_postgres_array(extra.get('value'))
+                if parsed_key == key and ((parsed_value == value) or (value in parsed_value)):
+                    return True
     return False
+
+def parse_postgres_array(array_string):
+    # Remove the outer curly braces
+    content = array_string.strip('{}')
+    
+    # Use regex to properly split elements respecting quotes
+    # This pattern finds either quoted strings or unquoted strings separated by commas
+    pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"|\s*,\s*|\s*([^,\s][^,]*[^,\s]?)\s*'
+    
+    items = []
+    current_index = 0
+    
+    while current_index < len(content):
+        # Find the next comma or end of string
+        next_comma = content.find(',', current_index)
+        if next_comma == -1:
+            next_comma = len(content)
+        
+        # Extract the item (trim quotes if present)
+        item = content[current_index:next_comma].strip()
+        if item.startswith('"') and item.endswith('"'):
+            item = item[1:-1]
+        
+        items.append(item)
+        
+        # Move past the comma
+        current_index = next_comma + 1
+    
+    return items
 
 def get_extra(extras_list, key):
     if extras_list:
         for extra in extras_list:
             if extra.get('key') == key:
                 try:
-                    d = datetime.strptime(extra.get('value'), "%Y-%m-%d %H:%M:%S")
-                    return d.strftime("%Y-%m-%d")
+                    if extra.get('value'):
+                        d = datetime.strptime(extra.get('value'), "%Y-%m-%d %H:%M:%S")
+                        return d.strftime("%Y-%m-%d")
                 except ValueError:
-                    return extra.get('value')
+                    return parse_postgres_array(extra.get('value'))
     return None
 
 def debug_helper_exists():
@@ -668,10 +720,12 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
                             toolkit.get_converter('convert_to_tags')('reporting_years')],
 
             'county': [toolkit.get_validator('ignore_missing'),
-                            toolkit.get_converter('convert_to_tags')('counties')],
+                            toolkit.get_converter('convert_to_tags')('counties'),
+                            toolkit.get_converter('convert_to_list_if_string')],
 
             'state_abbr': [toolkit.get_validator('ignore_missing'),
-                            toolkit.get_converter('convert_to_tags')('state_abbreviations')],
+                            toolkit.get_converter('convert_to_tags')('state_abbreviations'),
+                            toolkit.get_converter('convert_to_list_if_string')],
             
             'measurement_stage': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_tags')('measurement_stages')],
@@ -683,7 +737,8 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
                             toolkit.get_converter('convert_to_tags')('grant_cycles')],
 
             'pipeline_stage': [toolkit.get_validator('ignore_missing'),
-                            toolkit.get_converter('convert_to_tags')('pipeline_stages')],
+                            toolkit.get_converter('convert_to_tags')('pipeline_stages'),
+                            toolkit.get_converter('convert_to_list_if_string')],
 
             'nature_based_solution': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_tags')('nature_based_solution')],
@@ -742,9 +797,11 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
                 toolkit.get_validator('ignore_missing')],
             'county': [
                 toolkit.get_converter('convert_from_tags')('counties'),
+                toolkit.get_converter('convert_to_list_if_string'),
                 toolkit.get_validator('ignore_missing')],
             'state_abbr': [
                 toolkit.get_converter('convert_from_tags')('state_abbreviations'),
+                toolkit.get_converter('convert_to_list_if_string'),
                 toolkit.get_validator('ignore_missing')],
             'measurement_stage': [
                 toolkit.get_converter('convert_from_tags')('measurement_stages'),
@@ -757,6 +814,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
                 toolkit.get_validator('ignore_missing')],
             'pipeline_stage': [
                 toolkit.get_converter('convert_from_tags')('pipeline_stages'),
+                toolkit.get_converter('convert_to_list_if_string'),
                 toolkit.get_validator('ignore_missing')],
             'nature_based_solution': [
                 toolkit.get_converter('convert_from_tags')('nature_based_solutions'),
@@ -809,7 +867,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
             'extras_has_value' : extras_has_value,
             'get_extra' : get_extra,
             'monitoring_parameters' : monitoring_parameters,
-            'get_mon_param_options_by_nbs' : get_mon_param_options_by_nbs,
+            'get_grant_required_metrics_by_nbs' : get_grant_required_metrics_by_nbs,
             'get_satisfied_metrics' : get_satisfied_metrics,
             'get_nbs_from_package_id': get_nbs_from_package_id,
             'doc_types': doc_types
@@ -856,16 +914,20 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
             'owner_group': [toolkit.get_converter('convert_from_extras'),
                               toolkit.get_validator('ignore_missing')],
             'pipeline_stage': [toolkit.get_converter('convert_from_extras'),
-                              toolkit.get_validator('ignore_missing')],
+                                toolkit.get_converter('convert_to_list_if_string'),
+                                toolkit.get_validator('ignore_missing')],
             'nature_based': [toolkit.get_converter('convert_from_extras'),
+                            toolkit.get_converter('convert_to_list_if_string'),
                             toolkit.get_validator('ignore_missing')],
             'metric_category': [toolkit.get_converter('convert_from_extras'),
                                toolkit.get_validator('ignore_missing')],
             'grant_status': [toolkit.get_converter('convert_from_extras'),
                             toolkit.get_validator('ignore_missing')],
-            'state_abbr': [toolkit.get_converter('convert_from_extras'),
+            'state_abbr_org': [toolkit.get_converter('convert_from_extras'),
+                           toolkit.get_converter('convert_to_list_if_string'),
                           toolkit.get_validator('ignore_missing')],
             'county': [toolkit.get_converter('convert_from_extras'),
+                       toolkit.get_converter('convert_to_list_if_string'),
                        toolkit.get_validator('ignore_missing')],
             'start_date': [toolkit.get_converter('convert_from_extras'),
                           toolkit.get_validator('isodate'),
@@ -883,16 +945,20 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
             'owner_group': [toolkit.get_converter('convert_to_extras'),
                               toolkit.get_validator('ignore_missing')],
             'pipeline_stage': [toolkit.get_validator('ignore_missing'),
+                               toolkit.get_converter('convert_to_list_if_string'),
                               toolkit.get_converter('convert_to_extras')],
             'nature_based': [toolkit.get_validator('ignore_missing'),
+                            toolkit.get_converter('convert_to_list_if_string'),
                             toolkit.get_converter('convert_to_extras')],
             'metric_category': [toolkit.get_validator('ignore_missing'),
                                toolkit.get_converter('convert_to_extras')],
             'grant_status': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_extras')],
-            'state_abbr': [toolkit.get_validator('ignore_missing'),
+            'state_abbr_org': [toolkit.get_validator('ignore_missing'),
+                           toolkit.get_converter('convert_to_list_if_string'),
                           toolkit.get_converter('convert_to_extras')],
             'county': [toolkit.get_validator('ignore_missing'),
+                       toolkit.get_converter('convert_to_list_if_string'),
                        toolkit.get_converter('convert_to_extras')],
             'start_date': [toolkit.get_validator('ignore_missing'),
                           toolkit.get_validator('isodate'),

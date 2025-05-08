@@ -11,9 +11,7 @@
 {% set organizations_available_count = organizations_available|length %}
 
 {% block package_basic_fields_title %}
-{{data}}
 {% set package_id = request.args.get('package_id') or request.view_args.get('id') %}
-{{package_id}}
 <h2>Dataset Information</h2>
 <div>Tip: A Dataset is a collection of similar files. For example, a vegetation cover package may include a PDF for the official report, a zip file of shapefile data, and an excel sheet of survey data.</div><br/>
 
@@ -87,7 +85,7 @@
   {% if show_visibility_selector %}
   {% block package_metadata_fields_visibility %}
   <div class="form-group control-medium">
-    <label for="field-private" class="control-label">{{ _('Visibility') }}<i class="fa fa-info-circle" title="Data and documents uploaded to satisfy grant monitoring requirements are required to be marked public. If additional, proprietary documents need to be kept private, please create a second dataset and mark the visibility as “Private.” Private data will only be viewable by NFWF and the site administrator. For all datasets marked as private, please provide a rationale as to why the information is not appropriate for public sharing."></i></label>
+    <label for="field-private" class="control-label">{{ _('Visibility') }}<i class="fa fa-info-circle" title="Data and documents uploaded to satisfy grant monitoring requirements are required to be marked public. If additional, proprietary documents need to be kept private, please create a second dataset and mark the visibility as "Private." Private data will only be viewable by NFWF and the site administrator. For all datasets marked as private, please provide a rationale as to why the information is not appropriate for public sharing."></i></label>
     <div class="controls">
       <select id="field-private" name="private" class="form-control">
         {% for option in [('True', _('Private')), ('False', _('Public'))] %}
@@ -96,10 +94,35 @@
       </select>
     </div>
   </div>
-  {% endblock %}
-  
-  {{ form.markdown('private_rationale', id='field-private_rationale', label=_('Rationale for Private Data'), placeholder=_('Type rationale for private data here'), value=data.private_rationale, error=errors.private_rationale, is_required=true) }}
+{% endblock %}
 
+<div id="private-rationale-field" {% if data.private|trim == 'True' %}style="display: block;"{% else %}style="display: none;"{% endif %}>
+  {{ form.markdown('private_rationale', id='field-private_rationale', label=_('Rationale for Private Data'), placeholder=_('Type rationale for private data here'), value=data.private_rationale, error=errors.private_rationale, is_required=true) }}
+</div>
+
+<script type="text/javascript">
+  document.addEventListener('DOMContentLoaded', function() {
+    // Get the visibility dropdown element
+    var visibilityDropdown = document.getElementById('field-private');
+    // Get the rationale field div
+    var rationaleField = document.getElementById('private-rationale-field');
+    
+    // Function to toggle the rationale field based on visibility selection
+    function toggleRationaleField() {
+      if (visibilityDropdown.value === 'True') {
+        rationaleField.style.display = 'block';
+      } else {
+        rationaleField.style.display = 'none';
+      }
+    }
+    
+    // Add change event listener to the dropdown
+    visibilityDropdown.addEventListener('change', toggleRationaleField);
+    
+    // Initial call to set correct visibility
+    toggleRationaleField();
+  });
+</script>
   {% endif %}
 
   {% if show_organizations_selector and show_visibility_selector %}
