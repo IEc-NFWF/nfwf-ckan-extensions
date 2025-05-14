@@ -750,7 +750,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         cast(Schema, schema['resources']).update({
                 'metric': [toolkit.get_validator('ignore_missing'),
                         toolkit.get_converter('convert_to_list_if_string')],
-                'doc_type': [toolkit.get_validator('not_empty')]
+                'doc_type': [toolkit.get_validator('ignore_missing')]
                 })
         return schema
     
@@ -827,7 +827,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         cast(Schema, schema['resources']).update({
                 'metric': [toolkit.get_validator('ignore_missing'),
                         toolkit.get_converter('convert_to_list_if_string')],
-                'doc_type': [toolkit.get_validator('not_empty')]
+                'doc_type': [toolkit.get_validator('ignore_missing')]
                 })
         return schema
 

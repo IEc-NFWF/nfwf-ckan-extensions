@@ -8628,7 +8628,10 @@ html {
     margin-bottom:0
   }
   .search-form .search-input-group {
-    margin-bottom:30px
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: row;
+    width: 100%;
   }
   .tertiary .control-order-by {
     float:none;

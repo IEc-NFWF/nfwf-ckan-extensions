@@ -31,6 +31,8 @@
     {% endif %}
   {% endblock %}
 
+  {{data}}
+
   {% block errors %}{{ form.errors(error_summary) }}{% endblock %}
 
   <input name="id" value="{{ data.id }}" type="hidden"/>
