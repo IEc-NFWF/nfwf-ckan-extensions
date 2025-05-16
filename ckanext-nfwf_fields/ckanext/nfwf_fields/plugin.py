@@ -160,7 +160,7 @@ doc_type_vocab = [
 ]
 nbs_monitoring = { # if you change this, make sure to update 'monitoring_parameter_vocab'
     "Aquatic Connectivity": [],
-    "Beach, Dune, Barrier Island Restoration": ["Shoreline Position", "Beach-Dune Geomorphology"],
+    "Beach Dune or Barrier Island Restoration": ["Shoreline Position", "Beach-Dune Geomorphology"],
     "Coastal Forest Restoration": [],
     "Community Resilience Planning": [],
     "Coral Reef Restoration": ["Acres Restored", "Coral Abundance", "Survival", "Rugosity or Reef Height", "Fish Abundance"],
@@ -176,6 +176,13 @@ nbs_monitoring = { # if you change this, make sure to update 'monitoring_paramet
     "Stream Restoration": [],
     "Wildfire Prevention": []
 }
+monitoring_stage_vocab = [
+    'Baseline',
+    'Immediate Post-Implementation',
+    'One-Year Post-Implementation',
+    'Long-term',
+    'Other'
+]
 # from ckan.lib.helpers import unselected_facet_items
 
 # def get_facets_unselected(facet, limit=None):
@@ -435,6 +442,15 @@ def doc_types():
     except toolkit.ObjectNotFound:
         return None
     
+def monitoring_stages():
+    create_tag_vocabulary(monitoring_stage_vocab, 'monitoring_stages')
+    try:
+        tag_list = toolkit.get_action('tag_list')
+        monitoring_stages = tag_list(data_dict={'vocabulary_id': 'monitoring_stages'})
+        return monitoring_stages
+    except toolkit.ObjectNotFound:
+        return None
+
 def monitoring_parameters():
     create_tag_vocabulary(monitoring_parameter_vocab, 'monitoring_parameters')
     try:
@@ -750,7 +766,11 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         cast(Schema, schema['resources']).update({
                 'metric': [toolkit.get_validator('ignore_missing'),
                         toolkit.get_converter('convert_to_list_if_string')],
-                'doc_type': [toolkit.get_validator('ignore_missing')]
+                'doc_type': [toolkit.get_validator('ignore_missing')],
+                'monitoring_stages': [toolkit.get_validator('ignore_missing'),
+                        toolkit.get_converter('convert_to_list_if_string')],
+                'reporting_years_resource': [toolkit.get_validator('ignore_missing'),
+                        toolkit.get_converter('convert_to_list_if_string')],
                 })
         return schema
     
@@ -827,7 +847,11 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         cast(Schema, schema['resources']).update({
                 'metric': [toolkit.get_validator('ignore_missing'),
                         toolkit.get_converter('convert_to_list_if_string')],
-                'doc_type': [toolkit.get_validator('ignore_missing')]
+                'doc_type': [toolkit.get_validator('ignore_missing')],
+                'monitoring_stages': [toolkit.get_validator('ignore_missing'),
+                        toolkit.get_converter('convert_to_list_if_string')],
+                'reporting_years_resource': [toolkit.get_validator('ignore_missing'),
+                        toolkit.get_converter('convert_to_list_if_string')],
                 })
         return schema
 
@@ -870,7 +894,8 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
             'get_grant_required_metrics_by_nbs' : get_grant_required_metrics_by_nbs,
             'get_satisfied_metrics' : get_satisfied_metrics,
             'get_nbs_from_package_id': get_nbs_from_package_id,
-            'doc_types': doc_types
+            'doc_types': doc_types,
+            'monitoring_stages': monitoring_stages
             }
 
     # IConfigurer

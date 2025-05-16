@@ -31,8 +31,6 @@
     {% endif %}
   {% endblock %}
 
-  {{data}}
-
   {% block errors %}{{ form.errors(error_summary) }}{% endblock %}
 
   <input name="id" value="{{ data.id }}" type="hidden"/>
@@ -76,7 +74,7 @@
       <span title="This field is required" class="control-required">*</span>
       <label class="control-label" for="field-doc_type">{{ _("File / Document Type") }}</label>
       <div class="controls">
-        <select id="field-doc_type" name="doc_type" data-module="autocomplete">
+        <select id="field-doc_type" name="doc_type" class="form-control">
           {% if h.doc_types()|length > 1 %}
             <option value="">--Please choose an option--</option>
             {% endif %}
@@ -92,43 +90,97 @@
       </div>
     </div>
     <br/>
+    
+    <div id="data-labels-section" >
 
-    {% set satisfied_metrics = h.get_satisfied_metrics(package_id)  %}
-    {% set nbs_list = h.get_nbs_from_package_id(package_id) or [] %}
-    {% set grant_required_metrics = h.get_grant_required_metrics_by_nbs(nbs_list) %}
-    <h2>Data Labels</h2>
-    <div>
-      <p>These are your Grant-required metrics for your nature-based solution(s). A <i class="fa fa-check" style="color: green"></i> indicates metric data has been submitted.</p>
-      {% if nbs_list|length==0 %}
-      <p>Required Metrics: None</p>
-      {% elif nbs_list|length==1 %}
-      <p>{{nbs_list[0]}} Required Metrics:</p>
-      {% elif nbs_list|length==2 %}
-      <p>{{nbs_list[0]}} and {{nbs_list[1]}} Required Metrics:</p>
-      {% else %}
-      <p>{% for nbs in nbs_list[:-1] %}{{nbs}}, {% endfor %}and {{nbs_list[-1]}} Required Metrics:</p>
-      {% endif %}
-      <ul style="list-style-type:none;">
-        {% for metric in grant_required_metrics %}
-        <li><i {% if metric in satisfied_metrics %}class="fa fa-check"{% else %}class="fa fa-fw"{% endif %} style="color: green; width: 20px"></i> {{metric}}</li>
-        {% endfor %}
-      </ul>
-      <p><b>Note:</b> Metrics are required to be monitored at the time construction is completed (as-built) and again one-year post-construction (performance); additional monitoring timepoints are encouraged</p>
-      <div class="control-group">
-        <label class="control-label" for="field-metric">{{ _("Metric(s)") }}</label>
-        <div class="controls">
-          <select id="field-metric" name="metric" data-module="autocomplete" multiple>
-              {% for metric in h.monitoring_parameters() %}
-              <option value="{{ metric }}" {% if data.get('metric') and (metric in data.get('metric', [])) %}selected="selected"{% endif %}>
-                {{ metric }}
-              </option>
-            {% endfor %}
-          </select>
+      {% set satisfied_metrics = h.get_satisfied_metrics(package_id)  %}
+      {% set nbs_list = h.get_nbs_from_package_id(package_id) or [] %}
+      {% set grant_required_metrics = h.get_grant_required_metrics_by_nbs(nbs_list) %}
+      <h2>Data Labels</h2>
+      <div>
+        <p>These are your Grant-required metrics for your nature-based solution(s). A <i class="fa fa-check" style="color: green"></i> indicates metric data has been submitted.</p>
+        {% if nbs_list|length==0 %}
+        <p>Required Metrics: None</p>
+        {% elif nbs_list|length==1 %}
+        <p>{{nbs_list[0]}} Required Metrics:</p>
+        {% elif nbs_list|length==2 %}
+        <p>{{nbs_list[0]}} and {{nbs_list[1]}} Required Metrics:</p>
+        {% else %}
+        <p>{% for nbs in nbs_list[:-1] %}{{nbs}}, {% endfor %}and {{nbs_list[-1]}} Required Metrics:</p>
+        {% endif %}
+        <ul style="list-style-type:none;">
+          {% for metric in grant_required_metrics %}
+          <li><i {% if metric in satisfied_metrics %}class="fa fa-check"{% else %}class="fa fa-fw"{% endif %} style="color: green; width: 20px"></i> {{metric}}</li>
+          {% endfor %}
+        </ul>
+        <p><b>Note:</b> Metrics are required to be monitored at the time construction is completed (as-built) and again one-year post-construction (performance); additional monitoring timepoints are encouraged</p>
+        <div class="control-group">
+          <label class="control-label" for="field-metric">{{ _("Metric(s)") }}</label>
+          <div class="controls">
+            <select id="field-metric" name="metric" data-module="autocomplete" multiple>
+                {% for metric in h.monitoring_parameters() %}
+                <option value="{{ metric }}" {% if data.get('metric') and (metric in data.get('metric', [])) %}selected="selected"{% endif %}>
+                  {{ metric }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
+        <br/>
       </div>
       <br/>
+
     </div>
-    <br/>
+
+    <script type="text/javascript">
+      document.addEventListener('DOMContentLoaded', function() {
+        console.log('test 1!!!');
+        // Get the visibility dropdown element
+        var docTypeDropdown = document.getElementById('field-doc_type');
+        // Get the rationale field div
+        var dataLabelsSection = document.getElementById('data-labels-section');
+        
+        // Function to toggle the rationale field based on visibility selection
+        function toggleDataLabelsSection() {
+          console.log('test 2!!!');
+          if (docTypeDropdown.value === 'Monitoring Data') {
+            dataLabelsSection.style.display = 'block';
+          } else {
+            dataLabelsSection.style.display = 'none';
+          }
+        }
+        
+        // Add change event listener to the dropdown
+        docTypeDropdown.addEventListener('change', toggleDataLabelsSection);
+        
+        // Initial call to set correct visibility
+        toggleDataLabelsSection();
+      });
+    </script>
+
+    <div class="control-group">
+      <label class="control-label" for="field-monitoring_stages">{{ _("Monitoring Stage(s)") }}</label>
+      <div class="controls">
+        <select id="field-monitoring_stages" name="monitoring_stages" data-module="autocomplete" multiple>
+          {% for monitoring_stage in h.monitoring_stages()  %}
+            <option value="{{ monitoring_stage }}" {% if monitoring_stage in data.get('monitoring_stages', []) %}selected="selected"{% endif %}>{{ monitoring_stage }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <br>
+
+    <div class="control-group">
+      <label class="control-label" for="field-reporting_years_resource">{{ _("Reporting Year(s)") }}</label>
+      <div class="controls">
+        <select id="field-reporting_years_resource" name="reporting_years_resource" data-module="autocomplete" multiple>
+          {% for reporting_year in h.reporting_years()  %}
+            <option value="{{ reporting_year }}" {% if reporting_year in data.get('reporting_years_resource', []) %}selected="selected"{% endif %}>{{ reporting_year }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <br>
 
   {% endblock basic_fields %}
 

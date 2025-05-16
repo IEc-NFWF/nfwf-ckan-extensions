@@ -85,10 +85,10 @@
   {% if show_visibility_selector %}
   {% block package_metadata_fields_visibility %}
   <div class="form-group control-medium">
-    <label for="field-private" class="control-label">{{ _('Visibility') }}<i class="fa fa-info-circle" title="Data and documents uploaded to satisfy grant monitoring requirements are required to be marked public. If additional, proprietary documents need to be kept private, please create a second dataset and mark the visibility as "Private." Private data will only be viewable by NFWF and the site administrator. For all datasets marked as private, please provide a rationale as to why the information is not appropriate for public sharing."></i></label>
+    <label for="field-private" class="control-label">{{ _('Visibility') }}<i class="fa fa-info-circle" title="Data and documents uploaded to satisfy grant monitoring requirements are required to be marked public. If additional, proprietary documents need to be kept private, please create a second dataset and mark the visibility as 'Private.' Private data will only be viewable by NFWF and the site administrator. For all datasets marked as private, please provide a rationale as to why the information is not appropriate for public sharing."></i></label>
     <div class="controls">
       <select id="field-private" name="private" class="form-control">
-        {% for option in [('True', _('Private')), ('False', _('Public'))] %}
+        {% for option in [('False', _('Public')), ('True', _('Private'))] %}
         <option value="{{ option[0] }}" {% if option[0] == data.private|trim %}selected="selected"{% endif %}>{{ option[1] }}</option>
         {% endfor %}
       </select>
@@ -129,6 +129,7 @@
 </div>
 {% endif %}
 
+<!--
 {% if data.id and h.check_access('package_delete', {'id': data.id}) and data.state != 'active' %}
 <div class="form-group control-medium">
   <label for="field-state" class="control-label">{{ _('State') }}</label>
@@ -140,6 +141,7 @@
   </div>
 </div>
 {% endif %}
+-->
 
 {% endblock %}
 
