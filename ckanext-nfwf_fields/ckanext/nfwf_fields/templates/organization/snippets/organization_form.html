@@ -132,7 +132,7 @@
     </div>
     <br/>
 
-    {{ form.input('start_date', type='date', id='field-start_date', label=_('Anticipated Implementation Start Date'), placeholder=_('eg. 2025-06-05'), value=h.get_extra(data.get('extras'), 'start_date'), error=errors.last_modified, classes=[]) }}
+    {{ form.input('start_date', type='date', id='field-start_date', label=_('Activation Date'), placeholder=_('eg. 2025-06-05'), value=h.get_extra(data.get('extras'), 'start_date'), error=errors.last_modified, classes=[]) }}
 
     {{ form.input('close_date', type='date', id='field-close_date', label=_('Anticipated Close Date'), placeholder=_('eg. 2025-09-05'), value=h.get_extra(data.get('extras'), 'close_date'), error=errors.last_modified, classes=[]) }}
 

@@ -314,7 +314,11 @@ def create_tag_vocabulary(vocabulary_list,field_name):
         vocab = toolkit.get_action('vocabulary_create')(context, data)
         for tag in vocabulary_list:
             data = {'name': tag, 'vocabulary_id': vocab['id']}
-            toolkit.get_action('tag_create')(context, data)
+            try:
+                toolkit.get_action('tag_create')(context, data)
+            except toolkit.ValidationError:
+                # Tag already exists, ignore
+                pass
 
 def metric_classes():
     create_tag_vocabulary(metric_class_vocab,'metric_classes')
