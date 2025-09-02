@@ -15,57 +15,98 @@
 
   {% asset 'nfwf_theme/nfwf_theme' %}
 
-  <!-- Extra link and script to help render select2 and other modules -->
+  <!-- Extra link and script to help render select2 -->
   <link rel="stylesheet" href="{{ h.url_for_static('/base/vendor/select2/select2.css') }}">
-  <script async src="/base/javascript/modules/autocomplete.js"></script>
-  <script async src="/base/javascript/modules/basic-form.js"></script>
-  <script async src="/base/javascript/modules/confirm-action.js"></script>
-  <script async src="/base/javascript/modules/copy-into-buffer.js"></script>
-  <script async src="/base/javascript/modules/custom-fields.js"></script>
-  <script async src="/base/javascript/modules/data-viewer.js"></script>
-  <script async src="/base/javascript/modules/dataset-visibility.js"></script>
-  <script async src="/base/javascript/modules/image-upload.js"></script>
-  <script async src="/base/javascript/modules/media-grid.js"></script>
-  <script async src="/base/javascript/modules/metadata-button.js"></script>
-  <script async src="/base/javascript/modules/resource-form.js"></script>
-  <script async src="/base/javascript/modules/resource-reorder.js"></script>
-  <script async src="/base/javascript/modules/resource-upload-field.js"></script>
-  <script async src="/base/javascript/modules/resource-view-embed.js"></script>
-  <script async src="/base/javascript/modules/resource-view-filters-form.js"></script>
-  <script async src="/base/javascript/modules/resource-view-filters.js"></script>
-  <script async src="/base/javascript/modules/resource-view-reorder.js"></script>
-  <script async src="/base/javascript/modules/select-switch.js"></script>
-  <script async src="/base/javascript/modules/slug-preview.js"></script>
-  <script async src="/base/javascript/modules/table-selectable-rows.js"></script>
-  <script async src="/base/javascript/modules/table-toggle-more.js"></script>
-  <script async>
+
+  <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // Wait for jQuery and select2 to load
-      var checkExists = setInterval(function() {
-        if (window.jQuery && jQuery.fn.select2) {
-          clearInterval(checkExists);
+      var initializationComplete = false;
+      
+      // Wait for CKAN to be available
+      var checkCKAN = setInterval(function() {
+        if (window.ckan && window.ckan.module && typeof window.ckan.module.initialize === 'function') {
+          clearInterval(checkCKAN);
           
-          // Initialize all multiple select elements
-          jQuery('select[multiple]').each(function() {
-            if (!jQuery(this).hasClass('select2-hidden-accessible')) {
-              jQuery(this).select2({
-                width: '100%',
-                placeholder: 'Select options...',
-                allowClear: true
-              });
-            }
+          // Load all modules in parallel
+          var moduleScripts = [
+            '/base/javascript/modules/autocomplete.js',
+            '/base/javascript/modules/basic-form.js',
+            '/base/javascript/modules/confirm-action.js',
+            '/base/javascript/modules/copy-into-buffer.js',
+            '/base/javascript/modules/custom-fields.js',
+            '/base/javascript/modules/data-viewer.js',
+            '/base/javascript/modules/dataset-visibility.js',
+            '/base/javascript/modules/image-upload.js',
+            '/base/javascript/modules/media-grid.js',
+            '/base/javascript/modules/metadata-button.js',
+            '/base/javascript/modules/resource-form.js',
+            '/base/javascript/modules/resource-reorder.js',
+            '/base/javascript/modules/resource-upload-field.js',
+            '/base/javascript/modules/resource-view-embed.js',
+            '/base/javascript/modules/resource-view-filters-form.js',
+            '/base/javascript/modules/resource-view-filters.js',
+            '/base/javascript/modules/resource-view-reorder.js',
+            '/base/javascript/modules/select-switch.js',
+            '/base/javascript/modules/slug-preview.js',
+            '/base/javascript/modules/table-selectable-rows.js',
+            '/base/javascript/modules/table-toggle-more.js'
+          ];
+          
+          var loadedCount = 0;
+          var totalModules = moduleScripts.length;
+          
+          moduleScripts.forEach(function(src) {
+            var script = document.createElement('script');
+            script.src = src;
+            script.onload = function() {
+              loadedCount++;
+              // console.log('Loaded:', src, '(' + loadedCount + '/' + totalModules + ')');
+              
+              // Initialize once when all modules are loaded
+              if (loadedCount === totalModules && !initializationComplete) {
+                initializationComplete = true;
+                
+                try {
+                  ckan.module.initialize();
+                  // console.log('CKAN modules initialized successfully');
+                  
+                  // Setup select2
+                  if (window.jQuery && jQuery.fn.select2) {
+                    jQuery('select[multiple]').each(function() {
+                      if (!jQuery(this).hasClass('select2-hidden-accessible')) {
+                        jQuery(this).select2({
+                          width: '100%',
+                          placeholder: 'Select options...',
+                          allowClear: true
+                        });
+                      }
+                    });
+                  }
+                } catch (error) {
+                  console.error('Initialization error:', error);
+                }
+              }
+            };
+            
+            // Log errors loading modules
+            script.onerror = function() {
+              console.warn('Failed to load:', src);
+              loadedCount++;
+              if (loadedCount === totalModules && !initializationComplete) {
+                initializationComplete = true;
+                try {
+                  ckan.module.initialize();
+                  console.log('CKAN modules initialized (with some failures)');
+                } catch (error) {
+                  console.error('Fallback initialization error:', error);
+                }
+              }
+            };
+            
+            document.head.appendChild(script);
           });
         }
-      }, 100); // check every 100ms
-
-      if (window.ckan && window.jQuery) {        
-        // Initialize JavaScript modules
-        if (ckan.module && typeof ckan.module.initialize === 'function' && ckan.module.instances.length < 1) {
-          console.log('Calling ckan.module.initialize()');
-          ckan.module.initialize();
-        }
-      }
-
+      }, 100);
     });
   </script>
 {% endblock %}
