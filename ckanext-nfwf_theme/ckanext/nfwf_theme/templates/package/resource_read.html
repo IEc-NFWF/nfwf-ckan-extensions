@@ -147,12 +147,8 @@
             </thead>
             <tbody>
               <tr>
-                <th scope="row">{{ _('Data last updated') }}</th>
+                <th scope="row">{{ _('Last updated') }}</th>
                 <td>{{ h.render_datetime(res.last_modified) or h.render_datetime(res.created) or _('unknown') }}</td>
-              </tr>
-              <tr>
-                <th scope="row">{{ _('Metadata last updated') }}</th>
-                <td>{{ h.render_datetime(res.metadata_modified) or h.render_datetime(res.created) or _('unknown') }}</td>
               </tr>
               <tr>
                 <th scope="row">{{ _('Created') }}</th>
@@ -160,17 +156,24 @@
               </tr>
               <tr>
                 <th scope="row">{{ _('Format') }}</th>
-                <td>{{ res.format or res.mimetype_inner or res.mimetype or _('unknown') }}</td>
+                <td>{{ res.format or res.mimetype_inner or res.mimetype or _('') }}</td>
               </tr>
               <tr>
-                <th scope="row">{{ _('License') }}</th>
-                <td>{% snippet "snippets/license.html", pkg_dict=pkg, text_only=True %}</td>
+                <th scope="row">{{ _('File/Document Type') }}</th>
+                <td>{{ res.doc_type }}</td>
               </tr>
-              {% for key, value in h.format_resource_items(res.items()) %}
-                {% if key not in ('created', 'metadata modified', 'last modified', 'format') %}
-                  <tr class="toggle-more"><th scope="row">{{ key | capitalize }}</th><td>{{ value }}</td></tr>
-                {% endif %}
-              {% endfor %}
+              <tr>
+                <th scope="row">{{ _('Monitoring Stage(s)') }}</th>
+                <td>{{', '.join(res.monitoring_stages)}}</td>
+              </tr>
+              <tr>
+                <th scope="row">{{ _('Monitoring Metric(s)') }}</th>
+                <td>{{', '.join(res.metric)}}</td>
+              </tr>
+              <tr>
+                <th scope="row">{{ _('Reporting Year(s)') }}</th>
+                <td>{{', '.join(res.reporting_years_resource)}}</td>
+              </tr>
             </tbody>
           </table>
         </div>

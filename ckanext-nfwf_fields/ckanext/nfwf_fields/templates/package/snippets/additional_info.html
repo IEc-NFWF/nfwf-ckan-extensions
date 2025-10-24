@@ -2,15 +2,13 @@
 
 {% block package_additional_info %}
 
-{% if pkg_dict.metadata_modified %}
 <tr>
   <th scope="row" class="dataset-label">{{ _("Last Updated") }}</th>
   <td class="dataset-details">
       {% snippet 'snippets/local_friendly_datetime.html', datetime_obj=pkg_dict.metadata_modified %}
   </td>
 </tr>
-{% endif %}
-{% if pkg_dict.metadata_created %}
+
 <tr>
   <th scope="row" class="dataset-label">{{ _("Created") }}</th>
 
@@ -18,89 +16,24 @@
       {% snippet 'snippets/local_friendly_datetime.html', datetime_obj=pkg_dict.metadata_created %}
   </td>
 </tr>
-{% endif %}
 
-
-{% if pkg_dict.principal_investigator %}
 <tr>
   <th scope="row" class="dataset-label">{{ _("Data Maintainer") }}</th>
   <td class="dataset-details">{{pkg_dict.principal_investigator}}</td>
 </tr>
-{% endif %}
 
-{% if pkg_dict.point_of_contact_email %}
 <tr>
   <th scope="row" class="dataset-label">{{ _("Email Address") }}</th>
   <td class="dataset-details">{{pkg_dict.point_of_contact_email}}</td>
 </tr>
-{% endif %}
 
-  {% if pkg_dict.metric_category %}
-    <tr>
-      <th scope="row" class="dataset-label">{{ _("Metric Category") }}</th>
-      <td class="dataset-details">{{', '.join(pkg_dict.metric_category)}}</td>
-    </tr>
-  {% endif %}
-
-  {% if pkg_dict.metric_class %}
-  <tr>
-    <th scope="row" class="dataset-label">{{ _("Metric Class") }}</th>
-    <td class="dataset-details">{{', '.join(pkg_dict.metric_class)}}</td>
-  </tr>
-  {% endif %}
-
-  {% if pkg_dict.resilience_grant %}
-  <tr>
-    <th scope="row" class="dataset-label">{{ _("Resilience Grant") }}</th>
-    <td class="dataset-details">{{', '.join(pkg_dict.resilience_grant)}}</td>
-  </tr>
-  {% endif %}
-{#
-  {% if pkg_dict.monitoring_grant %}
-  <tr>
-    <th scope="row" class="dataset-label">{{ _("Monitoring Grant") }}</th>
-    <td class="dataset-details">{{', '.join(pkg_dict.monitoring_grant)}}</td>
-  </tr>
-  {% endif %}
-#}
-  {% if pkg_dict.nfwf_program %}
-  <tr>
-    <th scope="row" class="dataset-label">{{ _("NFWF Program") }}</th>
-    <td class="dataset-details">{{', '.join(pkg_dict.nfwf_program)}}</td>
-  </tr>
-  {% endif %}
-
-  {% if pkg_dict.reporting_year %}
-  <tr>
-    <th scope="row" class="dataset-label">{{ _("Reporting Years") }}</th>
-    <td class="dataset-details">{{', '.join(pkg_dict.reporting_year)}}</td>
-  </tr>
-  {% endif %}
-
-  {% if pkg_dict.state_abbr %}
-  <tr>
-    <th scope="row" class="dataset-label">{{ _("States and Territories") }}</th>
-    <td class="dataset-details">{{', '.join(pkg_dict.state_abbr)}}</td>
-  </tr>
-  {% endif %}
-
-  {% if pkg_dict.measurement_stage %}
-  <tr>
-    <th scope="row" class="dataset-label">{{ _("Measurement Stage") }}</th>
-    <td class="dataset-details">{{', '.join(pkg_dict.measurement_stage)}}</td>
-  </tr>
-  {% endif %}
-
-  {% if pkg_dict.restoration_activity %}
-  <tr>
-    <th scope="row" class="dataset-label">{{ _("Restoration Activity") }}</th>
-    <td class="dataset-details">{{', '.join(pkg_dict.restoration_activity)}}</td>
-  </tr>
-  {% endif %}
+<tr>
+  <th scope="row" class="dataset-label">{{ _("Monitoring Metric(s)") }}</th>
+  <td class="dataset-details">{{', '.join((pkg_dict.resources | map(attribute='metric') | select('defined') | sum(start=[])) | unique)}}</td>
+</tr>
 
 {% endblock %}
 
 {% block extras %}
-
 
 {% endblock %}

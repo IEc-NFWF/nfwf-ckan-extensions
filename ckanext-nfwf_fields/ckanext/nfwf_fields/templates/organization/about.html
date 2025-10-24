@@ -1,0 +1,10 @@
+{% ckan_extends %}
+
+{% block organization_extras %}
+  {# Replace default snippet path with custom organizaion one #}
+  {% set extras_dict = {} %}
+  {% for key, value in h.sorted_extras(group_dict.extras) %}
+      {% set _ = extras_dict.update({key: value}) %}
+  {% endfor %}
+  {% snippet 'organization/snippets/additional_info.html', extras = extras_dict %}
+{% endblock %}
