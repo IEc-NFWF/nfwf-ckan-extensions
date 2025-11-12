@@ -47,7 +47,7 @@
           -->
             {% for group in groups_available %}
             {# get out first group from users list only if there is not an existing org #}
-            {% set selected_group = (existing_group and existing_group == group.id) %}
+            {% set selected_group = (existing_group and existing_group[0] == group.id) %}
             <option value="{{ group.id }}" {% if selected_group %} selected="selected" {% endif %}>{{ group.display_name }}</option>
             {% endfor %}
           </select>

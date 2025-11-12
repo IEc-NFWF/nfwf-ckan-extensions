@@ -1,7 +1,7 @@
-{# This snippet creates an Additional Info Table
-extras is a dictionary
-#}
 {% if extras %}
+  {% macro display(key) %}
+    {{', '.join(h.get_extra(extras, key) or []) }}
+  {% endmacro %}
   <h3>{{ _('Additional Info') }}</h3>
   <table class="table table-striped table-bordered table-condensed">
     <thead>
@@ -13,27 +13,29 @@ extras is a dictionary
     <tbody>
       <tr>
         <th scope="row" class="dataset-label">{{ _('Grant Cycle') }}</th>
-        <td class="dataset-details">{{ extras.grant_cycle }}</td>
+        <td class="dataset-details">{{ display('grant_cycle') }}</td>
       </tr>
       <tr>
         <th scope="row" class="dataset-label">{{ _('Grant Status') }}</th>
-        <td class="dataset-details">{{ extras.grant_status }}</td>
+        <td class="dataset-details">{{ display('grant_status') }}</td>
       </tr>
       <tr>
         <th scope="row" class="dataset-label">{{ _('Nature-Based Solution(s)') }}</th>
-        <td class="dataset-details">{{ extras.nature_based | replace('{','') | replace('}','') | replace('"','') }}</td>
+        <td class="dataset-details">{{ display('nature_based') }}</td>
       </tr>
       <tr>
         <th scope="row" class="dataset-label">{{ _('Grant Program') }}</th>
-        <td class="dataset-details">{{ extras.owner_group }}</td>
+        {% set owner_group_id = (h.get_extra(extras, 'owner_group') or []) | first %}
+        {% set owner_group_title = (h.groups_available() | selectattr('id', 'equalto', owner_group_id) | map(attribute="title")) | first %}
+        <td class="dataset-details">{{ owner_group_title }}</td>
       </tr>
       <tr>
         <th scope="row" class="dataset-label">{{ _('Pipeline') }}</th>
-        <td class="dataset-details">{{ extras.pipeline_stage | replace('{','') | replace('}','') | replace('"','') }}</td>
+        <td class="dataset-details">{{ display('pipeline_stage') }}</td>
       </tr>
       <tr>
         <th scope="row" class="dataset-label">{{ _('State(s)') }}</th>
-        <td class="dataset-details">{{ extras.state_abbr_org | replace('{','') | replace('}','') }}</td>
+        <td class="dataset-details">{{ display('state_abbr_org') }}</td>
       </tr>
     </tbody>
   </table>
