@@ -19,7 +19,7 @@
 
     {% set organization_is_draft = data.get('state', 'draft').startswith('draft') or data.get('state', 'none') ==  'none' %}
     {% set organization_has_group = h.get_extra(data.extras, 'owner_group') or data.group_id %}
-    {% set groups_available = h.groups_available() %}
+    {% set groups_available = h.groups() | list %}
     {% set user_is_sysadmin = h.check_access('sysadmin') %}
     {% set show_groups_selector = groups_available %}
     {% set show_visibility_selector = organization_has_group or (groups_available and (user_is_sysadmin or organization_is_draft)) %}
@@ -48,7 +48,7 @@
             {% for group in groups_available %}
             {# get out first group from users list only if there is not an existing org #}
             {% set selected_group = (existing_group and existing_group[0] == group.id) %}
-            <option value="{{ group.id }}" {% if selected_group %} selected="selected" {% endif %}>{{ group.display_name }}</option>
+            <option value="{{ group.id }}" {% if selected_group %} selected="selected" {% endif %}>{{ group.title }}</option>
             {% endfor %}
           </select>
         </div>

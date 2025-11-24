@@ -26,7 +26,7 @@
       <tr>
         <th scope="row" class="dataset-label">{{ _('Grant Program') }}</th>
         {% set owner_group_id = (h.get_extra(extras, 'owner_group') or []) | first %}
-        {% set owner_group_title = (h.groups_available() | selectattr('id', 'equalto', owner_group_id) | map(attribute="title")) | first %}
+        {% set owner_group_title = (h.groups() | selectattr('id', 'equalto', owner_group_id) | map(attribute="title")) | first %}
         <td class="dataset-details">{{ owner_group_title }}</td>
       </tr>
       <tr>
