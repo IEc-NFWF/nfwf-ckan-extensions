@@ -3,6 +3,7 @@ from __future__ import annotations
 import ckan.plugins as plugins
 import ckan.plugins.toolkit as toolkit
 import ckan.lib.helpers as helpers
+from ckan.lib.navl.dictization_functions import Missing
 import ckan.model as model
 from flask import request
 import geonamescache
@@ -526,11 +527,30 @@ def restoration_activities():
 def extras_has_value(extras_list, key, value):
     if extras_list:
         for extra in extras_list:
-            parsed_key = extra.get('key')
-            if extra.get('value'):
-                parsed_value = parse_postgres_array(extra.get('value'))
-                if parsed_key == key and ((parsed_value == value) or (value in parsed_value)):
-                    return True
+            if extra.get('key') == key:
+                if extra.get('value'):
+                    parsed_value = parse_postgres_array(extra.get('value'))
+                    try:
+                        if value in parsed_value:
+                            return True
+                    except TypeError:
+                        if value == parsed_value:
+                            return True
+    return False
+
+def has_value(data_dict, key, value):
+    if data_dict:
+        if key in data_dict:
+            data_value = data_dict.get(key)
+            if not isinstance(data_value, Missing):
+                try:
+                    if value in data_value:
+                        return True
+                except TypeError:
+                    if value == data_value:
+                        return True
+        if 'extras' in data_dict:
+            return extras_has_value(data_dict.get('extras'), key, value)
     return False
 
 def parse_postgres_array(array_string):
@@ -566,12 +586,33 @@ def get_extra(extras_list, key):
     if extras_list:
         for extra in extras_list:
             if extra.get('key') == key:
-                try:
-                    if extra.get('value'):
-                        d = datetime.strptime(extra.get('value'), "%Y-%m-%d %H:%M:%S")
+                value = extra.get('value')
+                if value:
+                    try:
+                        d = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
                         return d.strftime("%Y-%m-%d")
-                except ValueError:
-                    return parse_postgres_array(extra.get('value'))
+                    except ValueError:
+                        return parse_postgres_array(value)
+    return None
+
+def get_value_or_extra(data_dict, key):
+    if data_dict:
+        if key in data_dict:
+            value = data_dict.get(key)
+            if not isinstance(value, Missing):
+                if isinstance(value, str):
+                    try:
+                        d = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+                        return d.strftime("%Y-%m-%d")
+                    except ValueError:
+                        try:
+                            datetime.strptime(value, "%Y-%m-%d")
+                            return value
+                        except ValueError:
+                            return parse_postgres_array(value)
+                return value
+        if 'extras' in data_dict:
+            return get_extra(data_dict.get('extras'), key)
     return None
 
 def debug_helper_exists():
@@ -893,7 +934,9 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
             'nature_based_solutions' : nature_based_solutions,
             'grant_statuses' : grant_statuses,
             'extras_has_value' : extras_has_value,
+            'has_value' : has_value,
             'get_extra' : get_extra,
+            'get_value_or_extra' : get_value_or_extra,
             'monitoring_parameters' : monitoring_parameters,
             'get_grant_required_metrics_by_nbs' : get_grant_required_metrics_by_nbs,
             'get_satisfied_metrics' : get_satisfied_metrics,
@@ -1022,7 +1065,9 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
             'nature_based_solutions' : nature_based_solutions,
             'grant_statuses' : grant_statuses,
             'extras_has_value' : extras_has_value,
-            'get_extra' : get_extra
+            'has_value' : has_value,
+            'get_extra' : get_extra,
+            'get_value_or_extra' : get_value_or_extra,
             }
 
     # IConfigurer
