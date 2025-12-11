@@ -4,7 +4,17 @@
 <form id='organization-edit-form' method="post" data-module="basic-form" enctype="multipart/form-data">
   {{ h.csrf_input() }}
   {% block error_summary %}
-    {{ form.errors(error_summary) }}
+  {% set field_labels = {
+    'Title': _('Name'),
+    'Name': _('URL'),
+    'Description': _('Description'),
+    'Owner group': _('Program'),
+    'Grant cycle': _('Grant Cycle'),
+    'Pipeline stage': _('Pipeline Stage'),
+    'Nature based': _('Nature-based Solution Type'),
+  } %}
+  {% set updated_error_summary = h.replace_keys(error_summary, field_labels) %}
+    {{ form.errors(updated_error_summary) }}
   {% endblock %}
 
   {% block basic_fields %}
