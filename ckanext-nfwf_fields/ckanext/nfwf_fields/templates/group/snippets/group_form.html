@@ -4,7 +4,11 @@
 <form id="group-edit" method="post" data-module="basic-form" enctype="multipart/form-data">
   {{ h.csrf_input() }}
   {% block error_summary %}
-    {{ form.errors(error_summary) }}
+  {% set field_labels = {
+    'Name': _('URL'),
+  } %}
+  {% set updated_error_summary = h.replace_keys(error_summary, field_labels) %}
+    {{ form.errors(updated_error_summary) }}
   {% endblock %}
 
   {% block basic_fields %}

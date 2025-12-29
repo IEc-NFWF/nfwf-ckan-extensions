@@ -31,7 +31,14 @@
     {% endif %}
   {% endblock %}
 
-  {% block errors %}{{ form.errors(error_summary) }}{% endblock %}
+  {% block errors %}
+  {% set field_labels = {
+    'Name': _('Name'),
+    'Doc type': _('File / Document Type'),
+  } %}
+  {% set updated_error_summary = h.replace_keys(error_summary, field_labels) %}
+    {{ form.errors(updated_error_summary) }}
+  {% endblock %}
 
   <input name="id" value="{{ data.id }}" type="hidden"/>
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import ckan.plugins as plugins
 import ckan.plugins.toolkit as toolkit
 import ckan.lib.helpers as helpers
+from ckan.lib.navl.dictization_functions import Missing
 import ckan.model as model
 from flask import request
 import geonamescache
@@ -523,14 +524,40 @@ def restoration_activities():
     except toolkit.ObjectNotFound:
         return None
 
+def private_rationale_validator(key, data, errors, context):
+    private = data.get(('private',))
+    if private:
+        toolkit.get_validator('not_empty')(key, data, errors, context)
+    else:
+        toolkit.get_validator('ignore_missing')(key, data, errors, context)
+
 def extras_has_value(extras_list, key, value):
     if extras_list:
         for extra in extras_list:
-            parsed_key = extra.get('key')
-            if extra.get('value'):
-                parsed_value = parse_postgres_array(extra.get('value'))
-                if parsed_key == key and ((parsed_value == value) or (value in parsed_value)):
-                    return True
+            if extra.get('key') == key:
+                if extra.get('value'):
+                    parsed_value = parse_postgres_array(extra.get('value'))
+                    try:
+                        if value in parsed_value:
+                            return True
+                    except TypeError:
+                        if value == parsed_value:
+                            return True
+    return False
+
+def has_value(data_dict, key, value):
+    if data_dict:
+        if key in data_dict:
+            data_value = data_dict.get(key)
+            if not isinstance(data_value, Missing):
+                try:
+                    if value in data_value:
+                        return True
+                except TypeError:
+                    if value == data_value:
+                        return True
+        if 'extras' in data_dict:
+            return extras_has_value(data_dict.get('extras'), key, value)
     return False
 
 def parse_postgres_array(array_string):
@@ -566,13 +593,50 @@ def get_extra(extras_list, key):
     if extras_list:
         for extra in extras_list:
             if extra.get('key') == key:
-                try:
-                    if extra.get('value'):
-                        d = datetime.strptime(extra.get('value'), "%Y-%m-%d %H:%M:%S")
+                value = extra.get('value')
+                if value:
+                    try:
+                        d = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
                         return d.strftime("%Y-%m-%d")
-                except ValueError:
-                    return parse_postgres_array(extra.get('value'))
+                    except ValueError:
+                        return parse_postgres_array(value)
     return None
+
+def get_value_or_extra(data_dict, key):
+    if data_dict:
+        if key in data_dict:
+            value = data_dict.get(key)
+            if not isinstance(value, Missing):
+                if isinstance(value, str):
+                    try:
+                        d = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+                        return d.strftime("%Y-%m-%d")
+                    except ValueError:
+                        try:
+                            datetime.strptime(value, "%Y-%m-%d")
+                            return value
+                        except ValueError:
+                            return parse_postgres_array(value)
+                return value
+        if 'extras' in data_dict:
+            return get_extra(data_dict.get('extras'), key)
+    return None
+
+def replace_keys(dict_old, dict_keys):
+    if dict_old is None:
+        return None
+    if dict_keys is None:
+        return dict_old
+    
+    dict_new = type(dict_old)()
+    for old_key, new_key in dict_keys.items():
+        if old_key in dict_old:
+            dict_new[new_key] = dict_old[old_key]
+    for key, value in dict_old.items():
+        if key not in dict_keys:
+            dict_new[key] = value
+    
+    return dict_new
 
 def debug_helper_exists():
     return True
@@ -701,11 +765,14 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
 
     def _modify_package_schema(self, schema):
         schema.update({
+            'title': [toolkit.get_validator('not_empty')],
+            'notes': [toolkit.get_validator('not_empty')],
             'principal_investigator': [toolkit.get_validator('not_empty'),
                             toolkit.get_converter('convert_to_extras')],
 
             'point_of_contact_email': [toolkit.get_validator('not_empty'),
-                            toolkit.get_converter('convert_to_extras'),toolkit.get_validator('email_validator')],
+                            toolkit.get_converter('convert_to_extras'),
+                            toolkit.get_validator('email_validator')],
 
             'point_of_contact_phone': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_extras')],
@@ -719,7 +786,8 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
             'alt_point_of_contact_phone': [toolkit.get_validator('ignore_missing'),
                             toolkit.get_converter('convert_to_extras')],
 
-            'private_rationale': [toolkit.get_validator('ignore_missing')],
+            'private_rationale': [private_rationale_validator,
+                                  toolkit.get_converter('convert_to_extras')],
 
             'metric_category': [toolkit.get_validator('ignore_missing'),
                                 toolkit.get_converter('convert_to_tags')('metric_categories')],
@@ -768,9 +836,10 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         })
         # Custom resource schema:
         cast(Schema, schema['resources']).update({
+                'name': [toolkit.get_validator('not_empty')],
                 'metric': [toolkit.get_validator('ignore_missing'),
                         toolkit.get_converter('convert_to_list_if_string')],
-                'doc_type': [toolkit.get_validator('ignore_missing')],
+                'doc_type': [toolkit.get_validator('not_empty')],
                 'monitoring_stages': [toolkit.get_validator('ignore_missing'),
                         toolkit.get_converter('convert_to_list_if_string')],
                 'reporting_years_resource': [toolkit.get_validator('ignore_missing'),
@@ -782,11 +851,13 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         schema = super(Nfwf_FieldsPlugin, self).show_package_schema()
         schema['tags']['__extras'].append(toolkit.get_converter('free_tags_only'))
         schema.update({
+            'title': [toolkit.get_validator('ignore_missing')],
+            'notes': [toolkit.get_validator('ignore_missing')],
             'principal_investigator': [toolkit.get_converter('convert_from_extras'),
-                        toolkit.get_validator('not_empty')],
+                        toolkit.get_validator('ignore_missing')],
 
             'point_of_contact_email': [toolkit.get_converter('convert_from_extras'),
-                        toolkit.get_validator('not_empty'),toolkit.get_validator('email_validator')],
+                        toolkit.get_validator('ignore_missing'),toolkit.get_validator('email_validator')],
 
             'point_of_contact_phone': [toolkit.get_converter('convert_from_extras'),
                         toolkit.get_validator('ignore_missing')],
@@ -800,7 +871,8 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
             'alt_point_of_contact_phone': [toolkit.get_converter('convert_from_extras'),
                         toolkit.get_validator('ignore_missing')],
 
-            'private_rationale': [toolkit.get_validator('ignore_missing')],
+            'private_rationale': [toolkit.get_converter('convert_from_extras'),
+                                  toolkit.get_validator('ignore_missing')],
 
             'metric_category': [toolkit.get_converter('convert_from_tags')('metric_categories'),
                 toolkit.get_validator('ignore_missing')],
@@ -893,7 +965,10 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
             'nature_based_solutions' : nature_based_solutions,
             'grant_statuses' : grant_statuses,
             'extras_has_value' : extras_has_value,
+            'has_value' : has_value,
             'get_extra' : get_extra,
+            'get_value_or_extra' : get_value_or_extra,
+            'replace_keys' : replace_keys,
             'monitoring_parameters' : monitoring_parameters,
             'get_grant_required_metrics_by_nbs' : get_grant_required_metrics_by_nbs,
             'get_satisfied_metrics' : get_satisfied_metrics,
@@ -938,16 +1013,18 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
         schema = super(Nfwf_Org_FieldsPlugin, self).show_group_schema()
         # schema['tags']['__extras'].append(toolkit.get_converter('free_tags_only'))
         schema.update({
+            'title': [toolkit.get_validator('ignore_missing')],
+            'description': [toolkit.get_validator('ignore_missing')],
             'grant_cycle': [toolkit.get_converter('convert_from_extras'),
-                            toolkit.get_validator('not_empty')],
+                            toolkit.get_validator('ignore_missing')],
             'owner_group': [toolkit.get_converter('convert_from_extras'),
-                              toolkit.get_validator('not_empty')],
+                              toolkit.get_validator('ignore_missing')],
             'pipeline_stage': [toolkit.get_converter('convert_from_extras'),
                                 toolkit.get_converter('convert_to_list_if_string'),
-                                toolkit.get_validator('not_empty')],
+                                toolkit.get_validator('ignore_missing')],
             'nature_based': [toolkit.get_converter('convert_from_extras'),
                             toolkit.get_converter('convert_to_list_if_string'),
-                            toolkit.get_validator('not_empty')],
+                            toolkit.get_validator('ignore_missing')],
             'metric_category': [toolkit.get_converter('convert_from_extras'),
                                toolkit.get_validator('ignore_missing')],
             'grant_status': [toolkit.get_converter('convert_from_extras'),
@@ -969,6 +1046,8 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
         
     def _modify_group_schema(self, schema):
         schema.update({
+            'title': [toolkit.get_validator('not_empty')],
+            'description': [toolkit.get_validator('not_empty')],
             'grant_cycle': [toolkit.get_validator('not_empty'),
                             toolkit.get_converter('convert_to_extras')],
             'owner_group': [toolkit.get_converter('convert_to_extras'),
@@ -1022,7 +1101,10 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
             'nature_based_solutions' : nature_based_solutions,
             'grant_statuses' : grant_statuses,
             'extras_has_value' : extras_has_value,
-            'get_extra' : get_extra
+            'has_value' : has_value,
+            'get_extra' : get_extra,
+            'get_value_or_extra' : get_value_or_extra,
+            'replace_keys' : replace_keys,
             }
 
     # IConfigurer

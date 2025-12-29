@@ -12,7 +12,19 @@ then itself be extended to add/remove blocks of functionality. #}
   <input type="hidden" name="_ckan_phase" value="dataset_new_1" />
   {# pkg_name used in 3 stage edit #}
   <input type="hidden" name="pkg_name" value="{{ data.id }}" />
-  {% block errors %}{{ form.errors(error_summary) }}{% endblock %}
+  {% block error_summary %}
+  {% set field_labels = {
+    'Owner org': _('Grant'),
+    'Title': _('Title'),
+    'Name': _('URL'),
+    'Principal investigator': _('Data Maintainer - Full Name'),
+    'Point of contact email': _('Data Maintainer - Email'),
+    'Description': _('Description'),
+    'Private rationale': _('Rationale for Private Data'),
+  } %}
+  {% set updated_error_summary = h.replace_keys(error_summary, field_labels) %}
+    {{ form.errors(updated_error_summary) }}
+  {% endblock %}
 
   {% block basic_fields %}
     {% snippet 'package/snippets/package_basic_fields.html', data=data, errors=errors %}
