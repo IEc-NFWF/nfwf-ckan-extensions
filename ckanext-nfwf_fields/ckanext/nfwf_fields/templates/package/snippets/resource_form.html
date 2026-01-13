@@ -44,7 +44,14 @@
 
   {% block basic_fields %}
     <h2>Resource Information</h2>
-    <div>Tip: Click here for <a href="">more information</a> on grant requirements. When uploading a resource, the predefined templates from the <a href="">Open Data Repository's Resources page</a> are preferred.</div><br/>
+    <div>
+      Tip: Visit
+      <a href="https://www.nfwf.org/programs/national-coastal-resilience-fund/national-coastal-resilience-fund-monitoring-metrics-and">
+        NCRF's Monitoring Metrics and Protocols page
+      </a>
+      for more information on grant monitoring requirements and data templates.
+    </div>
+    <br/>
 
     {% block basic_fields_url %}
       {% set is_upload = (data.url_type == 'upload') %}
