@@ -150,14 +150,19 @@ grant_status_vocab = [
 doc_type_vocab = [
     'Monitoring Data',
     'Monitoring Plan',
+    'Monitoring Report',
+    'Image',
     'GIS File',
+    'Implementation Report',
     'As Built Drawing',
     'Eng and Design Plan',
+    'Env Compliance',
     'Modeling Report',
     'Modeling Data',
     'Stakeholder Engagement Plan',
+    'Outreach Materials',
     'Resilience or Hazard Management Plan',
-    'Plan (Other)'
+    'Other'
 ]
 nbs_monitoring = { # if you change this, make sure to update 'monitoring_parameter_vocab'
     "Aquatic Connectivity": [],
