@@ -111,29 +111,36 @@ nature_based_solution_vocab = [
     "Coral Reef Restoration",
     "Easements and Acquisitions",
     "Floodplain Restoration",
-    "Green Stormwater Infrastructure",
+    "Nature-Based Stormwater Infrastructure",
+    "Habitat Conservation Practices",
+    "Kelp or Macroalgae Restoration",
     "Living Shoreline",
     "Mangrove Restoration",
     "Marine or Aquatic Habitat Restoration",
     "Marsh Restoration",
     "N/A",
     "Oyster Reef Restoration",
+    "Riparian Restoration",
+    "Seagrass Restoration",
     "Stream Restoration",
     "Wildfire Prevention"
 ]
 monitoring_parameter_vocab = [ # if you change this, make sure to update 'nbs_monitoring'
-    "Acres Restored",
+    "Area",
     "Avian Abundance",
     "Beach-Dune Geomorphology",
     "Coral Abundance",
+    "Density",
     "Elevation",
     "Fish Abundance",
+    "NBSI Condition Assessment",
     "Rugosity or Reef Height",
     "Shoreline Position",
     "Survival",
     "Vegetation",
     "Water Level",
-    "Water Quality"
+    "Water Quality",
+    "Width"
 ]
 grant_cycle_vocab = [str(year) for year in range(2015, 2031)]
 pipeline_stage_vocab = [
@@ -165,21 +172,25 @@ doc_type_vocab = [
     'Other'
 ]
 nbs_monitoring = { # if you change this, make sure to update 'monitoring_parameter_vocab'
-    "Aquatic Connectivity": [],
-    "Beach Dune or Barrier Island Restoration": ["Shoreline Position", "Beach-Dune Geomorphology"],
+    "Aquatic Connectivity": ["Width"],
+    "Beach Dune or Barrier Island Restoration": ["Shoreline Position", "Beach-Dune Geomorphology", "Elevation"],
     "Coastal Forest Restoration": [],
     "Community Resilience Planning": [],
-    "Coral Reef Restoration": ["Acres Restored", "Coral Abundance", "Survival", "Rugosity or Reef Height", "Fish Abundance"],
+    "Coral Reef Restoration": ["Area", "Coral Abundance", "Survival", "Rugosity or Reef Height"],
     "Easements and Acquisitions": [],
     "Floodplain Restoration": ["Vegetation", "Elevation", "Water Level"],
-    "Green Stormwater Infrastructure": [],
-    "Living Shoreline": ["Vegetation", "Water Level", "Elevation", "Shoreline Position", "Acres Restored"],
+    "Nature-Based Stormwater Infrastructure": ["NBSI Condition Assessment"],
+    "Habitat Conservation Practices": [],
+    "Kelp or Macroalgae Restoration": ["Density"],
+    "Living Shoreline": ["Vegetation", "Water Level", "Elevation", "Shoreline Position", "Area"],
     "Mangrove Restoration": [],
     "Marine or Aquatic Habitat Restoration": [],
     "Marsh Restoration": ["Vegetation", "Water Level", "Elevation", "Shoreline Position"],
     "N/A": [],
-    "Oyster Reef Restoration": ["Water Level", "Elevation", "Acres Restored"],
-    "Stream Restoration": [],
+    "Oyster Reef Restoration": ["Area", "Density", "Rugosity or Reef Height"],
+    "Riparian Restoration": ["Elevation", "Vegetation"],
+    "Seagrass Restoration": ["Vegetation"],
+    "Stream Restoration": ["Elevation", "Vegetation", "Width"],
     "Wildfire Prevention": []
 }
 monitoring_stage_vocab = [
@@ -328,147 +339,71 @@ def create_tag_vocabulary(vocabulary_list,field_name):
 
 def metric_classes():
     create_tag_vocabulary(metric_class_vocab,'metric_classes')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        metric_classes = tag_list(data_dict={'vocabulary_id': 'metric_classes'})
-        return metric_classes
-    except toolkit.ObjectNotFound:
-        return None
+    return metric_class_vocab
 
 def metric_categories():
     create_tag_vocabulary(metric_category_vocab,'metric_categories')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        metric_categories = tag_list(data_dict={'vocabulary_id': 'metric_categories'})
-        return metric_categories
-    except toolkit.ObjectNotFound:
-        return None
+    return metric_category_vocab
 
 def resilience_grants():
     create_tag_vocabulary(resilience_grant_vocab,'resilience_grants')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        resilience_grants = tag_list(data_dict={'vocabulary_id': 'resilience_grants'})
-        return resilience_grants
-    except toolkit.ObjectNotFound:
-        return None
+    return resilience_grant_vocab
 
 def monitoring_grants():
     create_tag_vocabulary(monitoring_grant_vocab,'monitoring_grants')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        monitoring_grants = tag_list(data_dict={'vocabulary_id': 'monitoring_grants'})
-        return monitoring_grants
-    except toolkit.ObjectNotFound:
-        return None
+    return monitoring_grant_vocab
 
 def nfwf_programs():
     create_tag_vocabulary(nfwf_program_vocab,'nfwf_programs')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        nfwf_programs = tag_list(data_dict={'vocabulary_id': 'nfwf_programs'})
-        return nfwf_programs
-    except toolkit.ObjectNotFound:
-        return None
+    return nfwf_program_vocab
 
 def reporting_years():
     create_tag_vocabulary(reporting_year_vocab,'reporting_years')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        reporting_years = tag_list(data_dict={'vocabulary_id': 'reporting_years'})
-        return reporting_years
-    except toolkit.ObjectNotFound:
-        return None
+    return reporting_year_vocab
 
 def counties():
     create_tag_vocabulary(county_vocab,'counties')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        counties = tag_list(data_dict={'vocabulary_id': 'counties'})
-        return counties
-    except toolkit.ObjectNotFound:
-        return None
+    return county_vocab
 
 def state_abbreviations():
     create_tag_vocabulary(state_abbr_vocab,'state_abbreviations')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        state_abbreviations = tag_list(data_dict={'vocabulary_id': 'state_abbreviations'})
-        return state_abbreviations
-    except toolkit.ObjectNotFound:
-        return None
+    return state_abbr_vocab
 
 def measurement_stages():
     create_tag_vocabulary(measurement_stage_vocab,'measurement_stages')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        measurement_stages = tag_list(data_dict={'vocabulary_id': 'measurement_stages'})
-        return measurement_stages
-    except toolkit.ObjectNotFound:
-        return None
-    
+    return measurement_stage_vocab
+
 def grant_cycles():
     create_tag_vocabulary(grant_cycle_vocab, 'grant_cycles')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        grant_cycles = tag_list(data_dict={'vocabulary_id': 'grant_cycles'})
-        return grant_cycles
-    except toolkit.ObjectNotFound:
-        return None
-    
+    return grant_cycle_vocab
+
 def pipeline_stages():
     create_tag_vocabulary(pipeline_stage_vocab, 'pipeline_stages')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        pipeline_stages = tag_list(data_dict={'vocabulary_id': 'pipeline_stages'})
-        return pipeline_stages
-    except toolkit.ObjectNotFound:
-        return None
+    return pipeline_stage_vocab
 
 def nature_based_solutions():
     create_tag_vocabulary(nature_based_solution_vocab, 'nature_based_solutions')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        nature_based_solutions = tag_list(data_dict={'vocabulary_id': 'nature_based_solutions'})
-        return nature_based_solutions
-    except toolkit.ObjectNotFound:
-        return None
+    return nature_based_solution_vocab
 
 def grant_statuses():
     create_tag_vocabulary(grant_status_vocab, 'grant_statuses')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        grant_statuses = tag_list(data_dict={'vocabulary_id': 'grant_statuses'})
-        return grant_statuses
-    except toolkit.ObjectNotFound:
-        return None
+    return grant_status_vocab
 
 def doc_types():
     create_tag_vocabulary(doc_type_vocab, 'doc_types')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        doc_types = tag_list(data_dict={'vocabulary_id': 'doc_types'})
-        return doc_types
-    except toolkit.ObjectNotFound:
-        return None
-    
+    return doc_type_vocab
+
 def monitoring_stages():
     create_tag_vocabulary(monitoring_stage_vocab, 'monitoring_stages')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        monitoring_stages = tag_list(data_dict={'vocabulary_id': 'monitoring_stages'})
-        return monitoring_stages
-    except toolkit.ObjectNotFound:
-        return None
+    return monitoring_stage_vocab
 
 def monitoring_parameters():
     create_tag_vocabulary(monitoring_parameter_vocab, 'monitoring_parameters')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        monitoring_parameters = tag_list(data_dict={'vocabulary_id': 'monitoring_parameters'})
-        return monitoring_parameters
-    except toolkit.ObjectNotFound:
-        return None
+    return monitoring_parameter_vocab
+
+def restoration_activities():
+    create_tag_vocabulary(restoration_activity_vocab, 'restoration_activities')
+    return restoration_activity_vocab
 
 def get_grant_required_metrics_by_nbs(nbs_type_list):
     grant_required_metrics = []
@@ -509,25 +444,6 @@ def get_nbs_from_package_id(package_id):
         if (org.get('extras')):
             return get_extra(org.get('extras'), 'nature_based')
     return []
-
-
-def restoration_activities():
-    create_tag_vocabulary(restoration_activity_vocab,'restoration_activities')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        restoration_activities = tag_list(data_dict={'vocabulary_id': 'restoration_activities'})
-        return restoration_activities
-    except toolkit.ObjectNotFound:
-        return None
-
-def restoration_activities():
-    create_tag_vocabulary(restoration_activity_vocab,'restoration_activities')
-    try:
-        tag_list = toolkit.get_action('tag_list')
-        restoration_activities = tag_list(data_dict={'vocabulary_id': 'restoration_activities'})
-        return restoration_activities
-    except toolkit.ObjectNotFound:
-        return None
 
 def private_rationale_validator(key, data, errors, context):
     private = data.get(('private',))
