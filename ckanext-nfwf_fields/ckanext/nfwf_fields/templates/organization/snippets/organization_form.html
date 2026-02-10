@@ -10,6 +10,7 @@
     'Description': _('Description'),
     'Owner group': _('Program'),
     'Grant cycle': _('Grant Cycle'),
+    'Funding source': _('Funding Source(s)'),
     'Pipeline stage': _('Pipeline Stage'),
     'Nature based': _('Nature-based Solution Type'),
   } %}
@@ -85,7 +86,13 @@
       </div>
     </div>
     <br/>
-    
+
+    {% if user_is_sysadmin %}
+      {% set existing_funding_source_array = h.get_value_or_extra(data, 'funding_source') %}
+      {% set existing_funding_source = existing_funding_source_array[0] if existing_funding_source_array else ''  %}
+      {{ form.input('funding_source', id='field-funding_source', label=_('Funding Source(s)'), value=existing_funding_source, error=errors.funding_source, is_required=true) }}
+    {% endif %}
+
     <div class="control-group">
       <span title="This field is required" class="control-required">*</span>
       <label class="control-label" for="field-pipeline_stage">{{ _("Pipeline Stage") }}</label>
