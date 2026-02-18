@@ -452,6 +452,13 @@ def private_rationale_validator(key, data, errors, context):
     else:
         toolkit.get_validator('ignore_missing')(key, data, errors, context)
 
+def sysadmin_not_empty(key, data, errors, context):
+    try:
+        toolkit.check_access('sysadmin', context)
+        toolkit.get_validator('not_empty')(key, data, errors, context)
+    except toolkit.NotAuthorized:
+        toolkit.get_validator('ignore_missing')(key, data, errors, context)
+
 def extras_has_value(extras_list, key, value):
     if extras_list:
         for extra in extras_list:
@@ -938,6 +945,8 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
             'description': [toolkit.get_validator('ignore_missing')],
             'grant_cycle': [toolkit.get_converter('convert_from_extras'),
                             toolkit.get_validator('ignore_missing')],
+            'funding_source': [toolkit.get_converter('convert_from_extras'),
+                               toolkit.get_validator('ignore_missing')],
             'owner_group': [toolkit.get_converter('convert_from_extras'),
                               toolkit.get_validator('ignore_missing')],
             'pipeline_stage': [toolkit.get_converter('convert_from_extras'),
@@ -971,6 +980,8 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
             'description': [toolkit.get_validator('not_empty')],
             'grant_cycle': [toolkit.get_validator('not_empty'),
                             toolkit.get_converter('convert_to_extras')],
+            'funding_source': [sysadmin_not_empty,
+                               toolkit.get_converter('convert_to_extras')],
             'owner_group': [toolkit.get_converter('convert_to_extras'),
                               toolkit.get_validator('not_empty')],
             'pipeline_stage': [toolkit.get_validator('not_empty'),

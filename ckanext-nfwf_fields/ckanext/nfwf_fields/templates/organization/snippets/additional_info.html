@@ -37,6 +37,12 @@
         <th scope="row" class="dataset-label">{{ _('State(s)') }}</th>
         <td class="dataset-details">{{ display('state_abbr_org') }}</td>
       </tr>
+      {% if h.check_access('sysadmin') %}
+        <tr>
+          <th scope="row" class="dataset-label">{{ _('Funding Source(s)') }}</th>
+          <td class="dataset-details">{{ display('funding_source') }}</td>
+        </tr>
+      {% endif %}
     </tbody>
   </table>
 {% endif %}
