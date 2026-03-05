@@ -1,0 +1,32 @@
+{% set stats_nbs = h.Nfwf_Theme_get_nbs_statistics() %}
+{% set list_nbs = [
+    "Aquatic Connectivity",
+    "Beach Dune or Barrier Island Restoration",
+    "Community Resilience Planning",
+    "Coral Reef Restoration",
+    "Floodplain Restoration",
+    "Living Shoreline",
+    "Marsh Restoration",
+    "Oyster Reef Restoration",
+    "Stream Restoration"
+] %}
+
+<div class="stats_nbs">
+  <h2>Explore data by nature-based solution:</h2>
+  <div class="inner">
+    <ul>
+      {% block nbs_stats_group %}
+      {% for nbs in list_nbs %}
+      <li class="item">
+        <a href="{{ h.url_for(controller='dataset', action='search', nature_based=nbs) }}">
+          {% set icon_file = '/base/images/nbs_icons/' + nbs|lower|replace(' ', '-') + '.svg' %}
+          <img src= {{ icon_file }} alt="{{ nbs }} icon">
+          <div class="name">{{ h.Nfwf_Theme_mid_break(nbs)|safe }}</div>
+          <div class="number">{{ h.SI_number_span(stats_nbs[nbs]) }}</div>
+        </a>  
+      </li>
+      {% endfor %}
+      {% endblock %}
+    </ul>
+  </div>
+</div>
