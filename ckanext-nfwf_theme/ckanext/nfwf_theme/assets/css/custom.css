@@ -350,13 +350,12 @@ a:hover, a:focus {
 .homepage .stats ul li {
   width: 150px;
   font-size: 2rem;
-  border: 2px solid;
-  border-radius: 15px; 
-  padding: 10px;
-  color: #ffffff;
 }
 
 .homepage .stats ul li a {
+  outline: 2px solid;
+  border-radius: 15px;
+  padding: 10px;
   color: #ffffff;
 }
 
@@ -367,6 +366,16 @@ a:hover, a:focus {
 
 .homepage .stats ul li a .name {
   font-size: 16pt;
+}
+
+.homepage .stats ul li a:hover {
+  outline: 4px solid;
+  background-color: #ffffff40;
+  font-weight: bold;
+}
+
+.homepage .stats ul li a:active {
+  background-color: #ffffff60;
 }
 
 .homepage .stats_nbs {
@@ -422,8 +431,7 @@ a:hover, a:focus {
   font-size: 8pt;
 }
 
-.homepage .stats_nbs ul li a:hover img,
-.homepage .stats_nbs ul li a:focus img {
+.homepage .stats_nbs ul li a:hover img {
   border-radius: 50%;
   outline: 3px #a0b426 solid;
 }
@@ -439,9 +447,7 @@ a:hover, a:focus {
 }
 
 .homepage .stats_nbs ul li a:hover .name,
-.homepage .stats_nbs ul li a:focus .name,
-.homepage .stats_nbs ul li a:hover .number,
-.homepage .stats_nbs ul li a:focus .number {
+.homepage .stats_nbs ul li a:hover .number {
   color: #a0b426
 }
 
