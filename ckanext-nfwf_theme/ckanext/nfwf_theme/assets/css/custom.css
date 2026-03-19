@@ -327,10 +327,11 @@ a:hover, a:focus {
 }
 
 #search_heading_t_csm {
-  font-size: 21px;
+  font-size: 30px;
   font-weight: bold;
   margin: 20px 50px 25px 50px;
-  line-height: 16.8pt;
+  line-height: 30pt;
+  text-wrap: balance;
 }
 
 .homepage [role="main"] .stats {
