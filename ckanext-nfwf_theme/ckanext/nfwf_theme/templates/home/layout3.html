@@ -1,37 +1,20 @@
 <div role="main" class="hero">
   <div class="container search_heading_csm">
-    <h1 id="search_heading_h_csm">Coastal Resilience Open Data Platform</h1>
-    <p id="search_heading_t_csm">Explore and download ecological and socioeconomic monitoring datasets from the National Fish and Wildlife Foundation's Coastal Resilience program grants.</p>
+    <p id="search_heading_t_csm">Explore and download resilience plans, project reports, and monitoring data from the National Fish and Wildlife Foundation’s Coastal Resilience programs grants.</p>
   </div>
   <div class="container">
     {% block search %}
       {% snippet 'home/snippets/search.html' %}
     {% endblock %}
+    {% block stats %}
+      {% snippet 'home/snippets/stats.html' %}
+    {% endblock %}
   </div>
 </div>
-<div role="main">
   <div class="container">
-    <div class="row row2">
-
-      <div class="col-md-12">
-        {% block stats %}
-          {% snippet 'home/snippets/stats.html' %}
-        {% endblock %}
-      </div>
-    <div class="col-md-12">
-
-      <h2 class="home_programs_heading_csm">PROGRAM DATASETS</h2>
-      <div class="short_underline_csm"></div>
-
-      {% block featured_organization %}
-
-      {% snippet 'group/snippets/nfwf_group_list.html',
-                 groups=h.Nfwf_Theme_most_popular_groups() %}
-    
-    {% endblock %}
-
-    </div>
-
-    </div>
+    <div class="row">
+      {% block stats_nbs %}
+        {% snippet 'home/snippets/stats_nbs.html' %}
+      {% endblock %}
   </div>
 </div>

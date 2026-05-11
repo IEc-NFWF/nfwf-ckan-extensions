@@ -288,10 +288,20 @@ a:hover, a:focus {
 
 /* <------------------------------------ homepage.html ------------------------------------> */
 .hero {
-  background: url("/base/images/bird_450.png");
+  background: url("/base/images/shallow_marsh.png");
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center center;
+  z-index: 0;
+}
+
+/* transparent overlay for background image */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: #80809080;
 }
 
 .homepage [role="main"] {
@@ -311,14 +321,17 @@ a:hover, a:focus {
 
 #search_heading_h_csm {
   font-size: 2.4375em;
+  font-weight: bold;
   margin-top: 14px;
   margin-bottom: 20px;
 }
 
 #search_heading_t_csm {
-  font-size: 21px;
+  font-size: 30px;
+  font-weight: bold;
   margin: 20px 50px 25px 50px;
-  line-height:36px;
+  line-height: 30pt;
+  text-wrap: balance;
 }
 
 .homepage [role="main"] .stats {
@@ -330,17 +343,113 @@ a:hover, a:focus {
 }
 
 .homepage .stats ul {
-  border-bottom: solid 2px rgba(119, 119, 118, 0.5);
-  padding: 20px 0 20px 0;
+  display: flex;
+  justify-content: space-between;
+  padding-top: 50px;
 }
 
 .homepage .stats ul li {
-  width: 33%;
+  width: 150px;
   font-size: 2rem;
 }
 
-.homepage .stats ul li a:hover, .homepage .stats ul li a:visited {
-  color: #206b82;
+.homepage .stats ul li a {
+  outline: 2px solid;
+  border-radius: 15px;
+  padding: 10px;
+  color: #ffffff;
+}
+
+.homepage .stats ul li a .number {
+  font-weight: bold;
+  font-size: 22pt;
+}
+
+.homepage .stats ul li a .name {
+  font-size: 16pt;
+}
+
+.homepage .stats ul li a:hover {
+  outline: 4px solid;
+  background-color: #ffffff40;
+  font-weight: bold;
+}
+
+.homepage .stats ul li a:active {
+  background-color: #ffffff60;
+}
+
+.homepage .stats_nbs {
+  margin: 20px 0 40px 0;
+}
+
+.homepage .stats_nbs h2 {
+  font-family: "merriweather",serif;
+  font-weight: bold;
+  font-size: 15pt;
+  color: #004a7e;
+  text-align: center;
+  margin: 0 0 25px 0;
+}
+
+.homepage .stats_nbs ul {
+  list-style-type: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 15px;
+  padding: 0;
+  max-width: 970px;
+  margin: 0 auto;
+}
+
+@media (max-width:767px) {
+  .homepage .stats_nbs ul {
+    max-width: 750px;
+    margin: 0 auto;
+  }
+}
+
+.homepage .stats_nbs ul li {
+  text-align: center;
+  height: 150px;
+  width: 180px;
+}
+
+.homepage .stats_nbs ul li a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: top;
+  height: 100%;
+  width: 100%;
+}
+
+.homepage .stats_nbs ul li a img {
+  height: 80px;
+  width: 80px;
+  margin-bottom: 10px;
+  font-size: 8pt;
+}
+
+.homepage .stats_nbs ul li a:hover img {
+  border-radius: 50%;
+  outline: 3px #a0b426 solid;
+}
+
+.homepage .stats_nbs ul li a .name {
+  font-size: 10pt;
+  color: #000000;
+}
+
+.homepage .stats_nbs ul li a .number {
+  font-size: 15pt;
+  color: #004a7e;
+}
+
+.homepage .stats_nbs ul li a:hover .name,
+.homepage .stats_nbs ul li a:hover .number {
+  color: #a0b426
 }
 
 .home_programs_heading_csm {
@@ -644,9 +753,6 @@ a:hover, a:focus {
 
 @media (max-width: 346px) {
   .hero {
-    background: url("/base/images/bird_450.png");
-    background-repeat: no-repeat;
-    background-size: cover;
     background-position: -1685px -0px;
   }
   .homepage [role="main"] {
@@ -662,9 +768,6 @@ a:hover, a:focus {
 
 @media (max-width: 338px) {
   .hero {
-    background: url("/base/images/bird_450.png");
-    background-repeat: no-repeat;
-    background-size: cover;
     background-position: -1795px 8px;
   }
   .homepage [role="main"] {
@@ -680,9 +783,6 @@ a:hover, a:focus {
 
 @media (max-width: 325px) {
   .hero {
-    background: url("/base/images/bird_450.png");
-    background-repeat: no-repeat;
-    background-size: cover;
     background-position: -1910px 0px;
   }
   .homepage [role="main"] {

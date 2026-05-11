@@ -10,6 +10,9 @@ import geonamescache
 from datetime import datetime
 from ckan.types import Schema
 from typing import cast
+import logging
+
+log = logging.getLogger(__name__)
 
 ## Currently storing in code, switch to using configuration file
 metric_class_vocab = [
@@ -618,6 +621,66 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
     plugins.implements(plugins.ITemplateHelpers)
     plugins.implements(plugins.IDatasetForm)
     plugins.implements(plugins.IFacets)
+    plugins.implements(plugins.IPackageController, inherit=True)
+    plugins.implements(plugins.IOrganizationController, inherit=True) 
+
+    def before_dataset_index(self, pkg_dict):
+        owner_org = pkg_dict.get('owner_org')
+
+        if owner_org:
+            try:
+                org = toolkit.get_action('organization_show')(
+                    {'ignore_auth': True},
+                    {'id': owner_org, 'include_extras': True}
+                )
+                extras = org.get('extras', [])
+
+                for extra in extras:
+                    if extra.get('key') == 'nature_based' and extra.get('state') == 'active':
+                        value = extra.get('value')
+                        if value:
+                            if isinstance(value, list):
+                                nature_types = value
+                            else:
+                                nature_types = parse_postgres_array(value)
+                            if nature_types:
+                                pkg_dict['nature_based'] = nature_types
+                        break
+            except Exception as e:
+                log.error('before_dataset_index error: {}'.format(e))
+
+        return pkg_dict
+    
+    def edit(self, entity):
+        # Check if this is an organization, not a package or group
+        try:
+            if not getattr(entity, 'is_organization', False):
+                return
+        except Exception:
+            return
+
+        try:
+            org_id = entity.id
+
+            # Get all datasets for this org
+            packages = toolkit.get_action('package_search')(
+                {'ignore_auth': True},
+                {
+                    'fq': 'owner_org:{}'.format(org_id),
+                    'rows': 1000,
+                    'fl': 'id'
+                }
+            )
+
+            from ckan.lib.search import rebuild
+            for pkg in packages.get('results', []):
+                try:
+                    rebuild(pkg['id'])
+                except Exception as e:
+                    log.error('Error reindexing dataset {}: {}'.format(pkg['id'], e))
+
+        except Exception as e:
+            log.error('Error reindexing datasets for org "{}": {}'.format(entity.title, e))
 
     def dataset_facets(self, facets_dict, package_type):
         '''Add new search facet (filter) for datasets.
@@ -629,6 +692,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         facets_dict['groups'] = 'Programs'
         facets_dict['organization'] = facets_dict.pop('organization')
         facets_dict['organization'] = "Grants"
+        facets_dict['nature_based'] = plugins.toolkit._("Nature-based Solutions")
         facets_dict['vocab_metric_classes'] = plugins.toolkit._("Metric Classes")
         facets_dict['vocab_restoration_activities'] = plugins.toolkit._("Restoration Activities")
         facets_dict['vocab_monitoring_parameters'] = plugins.toolkit._("Monitoring Parameters")
@@ -894,6 +958,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
             'grant_statuses' : grant_statuses,
             'extras_has_value' : extras_has_value,
             'has_value' : has_value,
+            'parse_postgres_array' : parse_postgres_array,
             'get_extra' : get_extra,
             'get_value_or_extra' : get_value_or_extra,
             'replace_keys' : replace_keys,
