@@ -1,0 +1,42 @@
+{% ckan_extends %}
+
+{% block search_facets %}
+  {% set _group = g.group_dict if g.group_dict is defined else none %}
+  {% set has_program = _group and not _group.get('is_organization') %}
+  {% set has_facets = facets and facets.fields %}
+
+  {% if has_program or has_facets %}
+    <p class="filter-list">
+
+      {# Non-removable Programs bubble on group pages #}
+      {% if has_program %}
+        <span class="facet">{{ _('Program') }}:</span>
+        <span class="filtered pill">
+          {{ _group.display_name }}
+        </span>
+      {% endif %}
+
+      {# Standard active filter bubbles with X buttons #}
+      {% if has_facets %}
+        {% for field in facets.fields %}
+          {% set search_facets_items = facets.search.get(field)['items'] if facets.search and field in facets.search else [] %}
+          <span class="facet">{{ facets.titles.get(field) }}:</span>
+          {% for value in facets.fields[field] %}
+            <span class="filtered pill">
+              {%- if facets.translated_fields and (field,value) in facets.translated_fields -%}
+                {{ facets.translated_fields[(field,value)] }}
+              {%- else -%}
+                {{ h.list_dict_filter(search_facets_items, 'name', 'display_name', value) }}
+              {%- endif %}
+              <a href="{{ facets.remove_field(field, value) }}" class="remove" title="{{ _('Remove') }}">
+                <i class="fa fa-times"></i>
+              </a>
+            </span>
+          {% endfor %}
+        {% endfor %}
+      {% endif %}
+
+    </p>
+    <a class="show-filters btn btn-default">{{ _('Filter Results') }}</a>
+  {% endif %}
+{% endblock %}

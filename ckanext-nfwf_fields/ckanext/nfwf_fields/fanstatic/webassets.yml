@@ -1,0 +1,9 @@
+facet_collapsible:
+  output: ckanext-nfwf_fields/%(version)s_facet-collapsible.css
+  contents:
+    - facet-collapsible.css
+
+facet_collapsible_js:
+  output: ckanext-nfwf_fields/%(version)s_facet-collapsible.js
+  contents:
+    - facet-collapsible.js

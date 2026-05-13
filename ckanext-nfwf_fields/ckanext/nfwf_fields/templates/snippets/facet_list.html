@@ -3,38 +3,51 @@
   {% with items = items or h.custom_get_facet_items_dict(name) %}
     {% if items or not hide_empty %}
       {% block facet_list_item %}
-        <section class="{{ wrapper_class or 'module module-narrow module-shallow' }}">
+        {% set has_active = (items | selectattr('active') | list | length > 0) or (request.args.getlist(name) | length > 0) %}
+        <section class="{{ wrapper_class or 'module module-narrow module-shallow' }} facet-collapsible{% if has_active %} facet-expanded{% endif %}" data-facet-has-active="{{ 'true' if has_active else 'false' }}">
           {% block facet_list_heading %}
-            <h2 class="module-heading">
-              <i class="fa fa-filter"></i>
+            {% set has_active = (items | selectattr('active') | list | length > 0) or (request.args.getlist(name) | length > 0) %}
+            <h2 class="module-heading facet-toggle" data-facet-name="{{ name }}">
+              <i class="fa {{ 'fa-caret-down' if has_active else 'fa-caret-right' }} facet-caret"></i>
               {% set title = title or h.get_facet_title(name) %}
               {{ title }}
             </h2>
           {% endblock %}
           {% block facet_list_items %}
+            {% set has_active = (items | selectattr('active') | list | length > 0) or (request.args.getlist(name) | length > 0) %}
             {% with items = items or h.custom_get_facet_items_dict(name) %}
-              {% if items %}
-                <nav>
-                  <ul class="{{ nav_class or 'list-unstyled nav nav-simple nav-facet' }}">
-                    {% for item in items %}
-                      {% set href = h.remove_url_param(name, item.name, extras=extras, alternative_url=alternative_url) if item.active else h.add_url_param(new_params={name: item.name}, extras=extras, alternative_url=alternative_url) %}
-                      {% set label = label_function(item) if label_function else item.display_name %}
-                      {% set label_truncated = h.truncate(label, 22) if not label_function else label %}
-                      {% set count = count_label(item['count']) if count_label else ('%d' % item['count']) %}
-                        <li class="{{ nav_item_class or 'nav-item' }}{% if item.active %} active{% endif %}">
-                          <a href="{{ href }}" title="{{ label if label != label_truncated else '' }}">
-                            <span class="item-label">{{ label_truncated }}</span>
-                            <span class="hidden separator"> - </span>
-                            <span class="item-count badge">{{ count }}</span>
-                          </a>
-                        </li>
-                    {% endfor %}
-                  </ul>
-                </nav>
+              <div class="facet-body" style="display: {{ 'block' if has_active else 'none' }};">
+                {% if items | length > 20 %}
+                  <div class="facet-search-wrapper">
+                    <div class="facet-search-input-group">
+                      <i class="fa fa-search facet-search-icon"></i>
+                      <input type="text" class="facet-search form-control" placeholder="Search {{ title }}..." autocomplete="off" />
+                    </div>
+                  </div>
+                {% endif %}
+                {% if items %}
+                  <nav>
+                    <ul class="{{ nav_class or 'list-unstyled nav nav-simple nav-facet' }} facet-list-scrollable">
+                      {% for item in items %}
+                        {% set href = h.facet_url_remove(name, item.name) if item.active else h.facet_url_add(name, item.name) %}
+                        {% set label = label_function(item) if label_function else item.display_name %}
+                        {% set count = count_label(item['count']) if count_label else ('%d' % item['count']) %}
+                          <li class="{{ nav_item_class or 'nav-item' }}{% if item.active %} active{% endif %}">
+                            <a href="{{ href }}" title="{{ label }}">
+                              <span class="item-label">{{ label }}</span>
+                              <span class="hidden separator"> - </span>
+                              <span class="item-count badge">{{ count }}</span>
+                            </a>
+                          </li>
+                      {% endfor %}
+                    </ul>
+                  </nav>
+                  <p class="facet-no-results" style="display: none;">No matching items found.</p>
                 <!-- Pagination for facets if needed -->
-              {% else %}
-                <p class="module-content empty">{{ _('There are no {facet_type} that match this search.').format(facet_type=title) }}</p>
-              {% endif %}
+                {% else %}
+                  <p class="module-content empty">{{ _('There are no {facet_type} that match this search.').format(facet_type=title) }}</p>
+                {% endif %}
+              </div>
             {% endwith %}
           {% endblock %}
         </section>
