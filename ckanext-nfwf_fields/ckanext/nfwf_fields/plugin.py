@@ -1177,6 +1177,14 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
 
     def read(self, entity):
         """Populate g.search_facets for the group page so facet_list snippets work."""
+        # Skip if not in a web request context (e.g. CLI reindex)
+        try:
+            from flask import has_request_context
+            if not has_request_context():
+                return
+        except Exception:
+            return
+
         try:
             group_name = entity.name
             if not group_name:
