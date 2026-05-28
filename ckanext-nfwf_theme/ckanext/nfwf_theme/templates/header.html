@@ -85,7 +85,7 @@
 
     <div class="collapse navbar-collapse" id="main-navigation-toggle">
       <div>
-        <h1 class="header_title_csm"><a href="{{ h.url_for('home.index') }}">Coastal Resilience Open Data Platform</a></h1>
+        <h1 class="header_title_csm"><a href="{{ h.url_for('home.index') }}">Coastal Resilience Open Data Platform{{ ' (STAGE)' if 'stage' in request.host.lower() }}</a></h1>
       </div>
       {% block header_site_navigation %}
       <div>
