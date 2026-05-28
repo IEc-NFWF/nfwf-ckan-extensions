@@ -1,6 +1,7 @@
 import ckan.plugins as plugins
 import ckan.plugins.toolkit as toolkit
 import ckanext.nfwf_fields.plugin as nfwf_fields_plugin
+import os
 
 def most_popular_groups():
     '''Return a sorted list of the groups with the most datasets.'''
@@ -50,6 +51,9 @@ def mid_break(text):
     closest = min(spaces, key=lambda i: abs(i - mid))
     return text[:closest] + '<br>' + text[closest + 1:]
 
+def get_alert_message():
+    return os.environ.get('CKAN_ALERT_MESSAGE', '')
+
 class Nfwf_ThemePlugin(plugins.SingletonPlugin):
     plugins.implements(plugins.IConfigurer)
     plugins.implements(plugins.ITemplateHelpers)
@@ -73,4 +77,5 @@ class Nfwf_ThemePlugin(plugins.SingletonPlugin):
             "Nfwf_Theme_get_site_statistics": get_site_statistics,
             "Nfwf_Theme_get_nbs_statistics": get_nbs_statistics,
             "Nfwf_Theme_mid_break": mid_break,
+            "Nfwf_Theme_get_alert_message": get_alert_message,
             }
