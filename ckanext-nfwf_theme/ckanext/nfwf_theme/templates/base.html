@@ -2,7 +2,12 @@
 
 {% block styles %}
   {{ super() }}
-  
+  {% asset 'nfwf_theme/nfwf_theme' %}
+  <!-- Extra link to help render select2 -->
+  <link rel="stylesheet" href="{{ h.url_for_static('/base/vendor/select2/select2.css') }}">
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
   <!-- Global site tag (gtag.js) - Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=UA-172162518-1"></script>
   <script>
@@ -13,11 +18,7 @@
   gtag('config', 'UA-172162518-1');
   </script>
 
-  {% asset 'nfwf_theme/nfwf_theme' %}
-
-  <!-- Extra link and script to help render select2 -->
-  <link rel="stylesheet" href="{{ h.url_for_static('/base/vendor/select2/select2.css') }}">
-
+  <!-- Script to help render select2 -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       var initializationComplete = false;
@@ -108,5 +109,26 @@
         }
       }, 100);
     });
+  </script>
+
+  <!-- Clear facet session state when leaving the dataset search page -->
+  <script>
+    (function() {
+      var path = window.location.pathname;
+      var isDatasetSearchPage = (path === '/dataset' || path === '/dataset/');
+      if (!isDatasetSearchPage) {
+        try {
+          sessionStorage.removeItem('ckan_facet_on_dataset_page');
+          sessionStorage.removeItem('ckan_facet_expanded_state');
+        } catch(e) {}
+      }
+      var isGroupPage = path.indexOf('/group/') === 0;
+      if (!isGroupPage) {
+        try {
+          sessionStorage.removeItem('ckan_facet_on_group_page');
+          sessionStorage.removeItem('ckan_facet_expanded_state');
+        } catch(e) {}
+      }
+    })();
   </script>
 {% endblock %}

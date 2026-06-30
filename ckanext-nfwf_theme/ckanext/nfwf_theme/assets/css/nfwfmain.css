@@ -7450,6 +7450,111 @@ html {
     background-position:0px -16px;
     right:3px
   }
+
+  /* --- Override old active item background/text --- */
+  .nav-facet .nav-item.active,
+  .nav-facet .nav-aside li.active {
+    background-color: transparent;
+  }
+
+  .nav-facet .nav-item.active > a,
+  .nav-facet .nav-aside li.active a {
+    position: relative;
+    color: #333333;
+    background-color: #eef5f7;
+    font-weight: 600;
+  }
+
+  .nav-facet .nav-item.active > a:hover,
+  .nav-facet .nav-aside li.active a:hover {
+    color: #333333;
+    background-color: #e0edf1;
+  }
+
+  /* --- Remove old right-edge arrow (replace, not hide) --- */
+  /* Active arrow used position:absolute — we replace ::before entirely */
+  .nav-facet .nav-item.active > a:before {
+    /* Reset all position/border properties from old arrow */
+    position: static;
+    border: none;
+    top: auto;
+    bottom: auto;
+    right: auto;
+    width: auto;
+    height: auto;
+    /* Now apply checkbox icon */
+    font-family: "Font Awesome 5 Free", "FontAwesome", sans-serif;
+    font-weight: 900;
+    content: "\f14a"; /* fas fa-check-square */
+    display: inline-block;
+    flex-shrink: 0;
+    margin-right: 6px;
+    font-size: 13px;
+    color: #206b82;
+    line-height: 1;
+  }
+
+  /* --- Remove old sprite :after icons --- */
+  .nav-facet .nav-item > a:hover:after,
+  .nav-facet .nav-item.active > a:after {
+    display: none !important;
+    content: none !important;
+    background-image: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  /* --- Flex layout for facet links --- */
+  .nav-facet .nav-item > a {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 1px 15px;
+  }
+
+  .nav-facet .nav-item > a .item-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nav-facet .nav-item > a .item-count {
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+
+  /* --- Unchecked checkbox on inactive items --- */
+  .nav-facet .nav-item:not(.active) > a::before {
+    font-family: "Font Awesome 5 Free", "FontAwesome", sans-serif;
+    font-weight: 400;
+    content: "\f0c8"; /* far fa-square */
+    display: inline-block;
+    flex-shrink: 0;
+    margin-right: 6px;
+    font-size: 13px;
+    color: #cccccc;
+    line-height: 1;
+  }
+
+  /* --- Hover on inactive: faint teal checkbox --- */
+  .nav-facet .nav-item:not(.active) > a:hover::before {
+    color: #206b82;
+    opacity: 0.5;
+  }
+
+  /* --- Tighter padding for facet list items --- */
+  .nav-facet.nav-simple > li,
+  .nav-facet > li {
+    padding: 1px 1px;
+    border-bottom: none;
+  }
+
+  .module-narrow .nav-facet .nav-item > a {
+    padding-left: 15px;
+    padding-right: 15px;
+    margin: 0;
+  }
   .user-list {
     padding-left:0;
     margin:0;

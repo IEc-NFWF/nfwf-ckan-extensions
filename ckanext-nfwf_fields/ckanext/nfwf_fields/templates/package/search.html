@@ -1,5 +1,15 @@
 {% ckan_extends %}
 
+{% block styles %}
+  {{ super() }}
+  {% asset 'nfwf_fields/facet_collapsible' %}
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  {% asset 'nfwf_fields/facet_collapsible_js' %}
+{% endblock %}
+
 {% block form %}
   {% set facets = {
     'fields': fields_grouped,
@@ -16,4 +26,78 @@
     (_('Popular'), 'views_recent desc') if g.tracking_enabled else (false, false) ]
   %}
   {% snippet 'snippets/search_form.html', form_id='dataset-search-form', type=dataset_type, query=q, sorting=sorting, sorting_selected=sort_by_selected, count=page.item_count, placeholder=h.humanize_entity_type('package', dataset_type, 'search placeholder') or _('Search datasets...'), facets=facets, show_empty=request.args, error=query_error, fields=fields %}
+{% endblock %}
+
+{% block secondary_content %}
+  {% for facet in facet_titles %}
+    {% if facet == 'organization' %}
+      {% snippet 'snippets/facet_list.html', 
+         title=facet_titles['organization'], 
+         name='organization', 
+         label_function=h.remove_grant_prefix 
+      %}
+    {% else %}
+      {{ h.snippet('snippets/facet_list.html', name=facet, title=facet_titles[facet]) }}
+    {% endif %}
+  {% endfor %}
+
+  {# Inline script runs synchronously RIGHT after facets render, before paint #}
+  <script>
+    (function() {
+      var STORAGE_KEY = 'ckan_facet_expanded_state';
+      var VISIT_KEY = 'ckan_facet_on_dataset_page';
+
+      // Check if we were previously on a dataset page
+      var wasOnDatasetPage = false;
+      try {
+        wasOnDatasetPage = sessionStorage.getItem(VISIT_KEY) === 'true';
+      } catch (e) {}
+
+      // Mark that we are now on the dataset page
+      try {
+        sessionStorage.setItem(VISIT_KEY, 'true');
+      } catch (e) {}
+
+      // If we weren't previously on a dataset page, clear stored expanded state
+      // Active filters are already expanded server-side, so just return
+      if (!wasOnDatasetPage) {
+        try {
+          sessionStorage.removeItem(STORAGE_KEY);
+        } catch (e) {}
+        return;
+      }
+
+      // Restore stored expanded state for sections without active filters
+      try {
+        var stored = sessionStorage.getItem(STORAGE_KEY);
+        if (!stored) return;
+        var expandedNames = JSON.parse(stored);
+        if (!expandedNames || !expandedNames.length) return;
+
+        var sections = document.querySelectorAll('.facet-collapsible');
+        for (var i = 0; i < sections.length; i++) {
+          var section = sections[i];
+          var toggle = section.querySelector('.facet-toggle');
+          if (!toggle) continue;
+
+          var facetName = toggle.getAttribute('data-facet-name');
+          // Skip sections already expanded server-side (active filters)
+          if (section.getAttribute('data-facet-has-active') === 'true') continue;
+
+          if (expandedNames.indexOf(facetName) !== -1) {
+            var body = section.querySelector('.facet-body');
+            var caret = section.querySelector('.facet-caret');
+            if (body) body.style.display = 'block';
+            if (caret) {
+              caret.classList.remove('fa-caret-right');
+              caret.classList.add('fa-caret-down');
+            }
+            section.classList.add('facet-expanded');
+          }
+        }
+      } catch (e) {
+        // Silent fail
+      }
+    })();
+  </script>
 {% endblock %}

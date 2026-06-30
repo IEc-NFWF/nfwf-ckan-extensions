@@ -11,7 +11,12 @@ from datetime import datetime
 from ckan.types import Schema
 from typing import cast
 import logging
+import json
+from urllib.parse import urlencode
+import re
+import threading
 
+_thread_state = threading.local()
 log = logging.getLogger(__name__)
 
 ## Currently storing in code, switch to using configuration file
@@ -587,7 +592,127 @@ def dump(obj):
         return str(obj)
     
 def custom_get_facet_items_dict(facet, search_facets=None, limit=None, exclude_active=False):
-    # Get search_facets from global g object if not provided
+    """
+    Get facet items for display. For facets with active selections,
+    runs a secondary search WITHOUT that facet's filter to show all
+    available options (enabling multi-select OR within same facet).
+    """
+    managed_facets = [
+        'groups', 'organization', 'nature_based', 'grant_cycle',
+        'pipeline_stage', 'doc_type', 'metric', 'monitoring_stages',
+        'res_format', 'state_abbr_org'
+    ]
+
+    # Get active values for this facet from request
+    try:
+        active_values = request.args.getlist(facet)
+    except RuntimeError:
+        active_values = []
+
+    # If this facet has active selections AND it's a managed facet,
+    # do a secondary search WITHOUT this facet's filter to get all options
+    if active_values and facet in managed_facets:
+        try:
+            q = request.args.get('q', '') or ''
+
+            # Build fq from OTHER active facets only (exclude current facet)
+            fq_parts = []
+            for other_facet in managed_facets:
+                if other_facet == facet:
+                    continue
+                other_values = request.args.getlist(other_facet)
+                if other_values:
+                    if len(other_values) == 1:
+                        fq_parts.append('%s:"%s"' % (other_facet, other_values[0]))
+                    else:
+                        or_clause = ' OR '.join('%s:"%s"' % (other_facet, v) for v in other_values)
+                        fq_parts.append('(%s)' % or_clause)
+
+            # If on a group page, scope to that group (not a URL param, applied implicitly)
+            try:
+                _group = toolkit.g.group_dict
+                if _group and not _group.get('is_organization'):
+                    fq_parts.append('groups:"%s"' % _group['name'])
+            except (AttributeError, TypeError):
+                pass
+
+            fq = ' '.join(fq_parts)
+
+             # Get current user for proper permission filtering
+            try:
+                user = toolkit.g.user
+            except Exception:
+                user = None
+
+            # Use proper auth context so private datasets are only counted
+            # for users who have permission to see them
+            if user:
+                context = {'user': user}
+                include_private = True
+            else:
+                context = {}
+                include_private = False
+
+            # Set thread-local flag to prevent before_dataset_search from modifying this query
+            _thread_state.skip_facet_or = True
+            try:
+                result = toolkit.get_action('package_search')(context, {
+                    'q': q,
+                    'fq': fq,
+                    'rows': 0,
+                    'facet.field': [facet],
+                    'facet.limit': -1,
+                    'facet.mincount': 0,
+                    'include_private': include_private,
+                })
+            finally:
+                _thread_state.skip_facet_or = False
+
+            search_facets_result = result.get('search_facets', {})
+            items_from_search = search_facets_result.get(facet, {}).get('items', [])
+
+            facets = []
+            found_active_names = set()
+
+            for facet_item in items_from_search:
+                if not facet_item.get('name', '').strip():
+                    continue
+                is_active = facet_item['name'] in active_values
+
+                if is_active:
+                    found_active_names.add(facet_item['name'])
+
+                if is_active and exclude_active:
+                    continue
+
+                # Skip items with 0 count unless they are active
+                if facet_item.get('count', 0) == 0 and not is_active:
+                    continue
+
+                facets.append(dict(active=is_active, **facet_item))
+
+            # Ensure ALL active values appear even if secondary search didn't return them
+            for active_val in active_values:
+                if active_val not in found_active_names and not exclude_active:
+                    facets.append({
+                        'name': active_val,
+                        'display_name': active_val,
+                        'count': 0,
+                        'active': True,
+                    })
+
+            facets.sort(key=lambda it: (-it['count'], it['display_name'].lower()))
+
+            if limit is not None and limit > 0:
+                return facets[:limit]
+
+            return facets
+
+        except Exception as e:
+            log.warning('Secondary facet search failed for %s: %s', facet, e)
+            # Fall through to normal behavior
+
+    # --- Normal behavior: use search_facets from the main search ---
     if not search_facets and hasattr(toolkit.g, 'search_facets'):
         search_facets = toolkit.g.search_facets
     
@@ -596,11 +721,11 @@ def custom_get_facet_items_dict(facet, search_facets=None, limit=None, exclude_a
     
     facets = []
     for facet_item in search_facets[facet]['items']:
-        if not len(facet_item['name'].strip()):
+        if not facet_item.get('name', '').strip():
             continue
         
         # Check if this facet is in the request
-        is_active = facet in request.args and facet_item['name'] in request.args.getlist(facet)
+        is_active = facet_item['name'] in active_values
         
         if not is_active:
             facets.append(dict(active=False, **facet_item))
@@ -616,6 +741,226 @@ def custom_get_facet_items_dict(facet, search_facets=None, limit=None, exclude_a
     
     return facets
 
+
+def remove_grant_prefix(facet_item):
+    name = facet_item.get('display_name')
+    if name.startswith("Grant "):
+        return name[6:]
+    return name
+
+
+def facet_url_add(facet_name, facet_value):
+    """Build URL that adds a facet value, preserving existing multi-select values (OR within same facet)."""
+    try:
+        params = [(k, v) for k, v in request.args.items(multi=True) if k != 'page']
+    except RuntimeError:
+        return ''
+    # Don't add duplicates
+    if (facet_name, facet_value) not in params:
+        params.append((facet_name, facet_value))
+    base_url = request.path
+    if params:
+        return base_url + '?' + urlencode(params)
+    return base_url
+
+
+def facet_url_remove(facet_name, facet_value):
+    """Build URL that removes a specific facet value, preserving other selections."""
+    try:
+        params = [(k, v) for k, v in request.args.items(multi=True) if k != 'page']
+    except RuntimeError:
+        return ''
+    params = [(k, v) for k, v in params if not (k == facet_name and v == facet_value)]
+    base_url = request.path
+    if params:
+        return base_url + '?' + urlencode(params)
+    return base_url
+
+
+def _auth_aware_package_count(context, fq_field, fq_value):
+    """
+    Return a dataset count respecting the current user's auth level.
+    Sets skip_facet_or to prevent before_dataset_search from injecting
+    facet OR clauses into this internal count query.
+    """
+    try:
+        _thread_state.skip_facet_or = True
+        try:
+            result = toolkit.get_action('package_search')(
+                dict(context),
+                {
+                    'fq': '%s:"%s"' % (fq_field, fq_value),
+                    'rows': 0,
+                    'include_private': True,
+                }
+            )
+        finally:
+            _thread_state.skip_facet_or = False
+
+        return result.get('count', 0)
+
+    except Exception as e:
+        log.warning(
+            'auth_aware_package_count failed for %s:"%s": %s',
+            fq_field, fq_value, e
+        )
+        return 0
+
+
+@toolkit.chained_action
+def _chained_group_show(original_action, context, data_dict):
+    """
+    Wrap group_show to replace package_count with an auth-aware value.
+    """
+    result = original_action(context, data_dict)
+    if context.get('__skip_package_count'):
+        return result
+
+    if isinstance(result, dict) and 'package_count' in result:
+        is_org = result.get('is_organization', False)
+        name = result.get('name') or result.get('id')
+        if name:
+            # Solr field 'groups' stores group names
+            # Solr field 'organization' stores org names
+            fq_field = 'organization' if is_org else 'groups'
+            result['package_count'] = _auth_aware_package_count(
+                context, fq_field, name
+            )
+
+    return result
+
+
+@toolkit.chained_action
+def _chained_group_list(original_action, context, data_dict):
+    """
+    Wrap group_list to replace package_count on every item with an
+    auth-aware value. Uses a single batched Solr facet query instead
+    of one query per group.
+    """
+    result = original_action(context, data_dict)
+
+    all_fields = data_dict.get('all_fields', False)
+    include_dataset_count = data_dict.get('include_dataset_count', True)
+
+    if all_fields and include_dataset_count and isinstance(result, list) and result:
+        try:
+            _thread_state.skip_facet_or = True
+            try:
+                facet_result = toolkit.get_action('package_search')(
+                    dict(context),
+                    {
+                        'q': '*:*',
+                        'rows': 0,
+                        'include_private': True,
+                        'facet.field': ['groups'],
+                        'facet.limit': -1,
+                        'facet.mincount': 0,
+                    }
+                )
+            finally:
+                _thread_state.skip_facet_or = False
+
+            counts = {
+                item['name']: item['count']
+                for item in facet_result
+                    .get('search_facets', {})
+                    .get('groups', {})
+                    .get('items', [])
+            }
+            for group in result:
+                if isinstance(group, dict):
+                    name = group.get('name')
+                    if name:
+                        group['package_count'] = counts.get(name, 0)
+
+        except Exception as e:
+            log.warning('Batched group count failed, falling back: %s', e)
+            for group in result:
+                if isinstance(group, dict) and 'package_count' in group:
+                    name = group.get('name') or group.get('id')
+                    if name:
+                        group['package_count'] = _auth_aware_package_count(
+                            context, 'groups', name
+                        )
+
+    return result
+
+
+@toolkit.chained_action
+def _chained_organization_show(original_action, context, data_dict):
+    """
+    Wrap organization_show to replace package_count with an auth-aware value.
+    """
+    result = original_action(context, data_dict)
+
+    if isinstance(result, dict) and 'package_count' in result:
+        org_name = result.get('name')
+        if org_name:
+            # Solr's 'organization' field stores the org name/slug
+            # Solr's 'owner_org' field stores the org UUID
+            # Use 'organization' since we have the name
+            result['package_count'] = _auth_aware_package_count(
+                context, 'organization', org_name
+            )
+
+    return result
+
+
+@toolkit.chained_action
+def _chained_organization_list(original_action, context, data_dict):
+    """
+    Wrap organization_list to replace package_count with auth-aware values.
+    Uses a single batched Solr facet query.
+    """
+    result = original_action(context, data_dict)
+
+    all_fields = data_dict.get('all_fields', False)
+    include_dataset_count = data_dict.get('include_dataset_count', True)
+
+    if all_fields and include_dataset_count and isinstance(result, list) and result:
+        try:
+            _thread_state.skip_facet_or = True
+            try:
+                facet_result = toolkit.get_action('package_search')(
+                    dict(context),
+                    {
+                        'q': '*:*',
+                        'rows': 0,
+                        'include_private': True,
+                        'facet.field': ['organization'],
+                        'facet.limit': -1,
+                        'facet.mincount': 0,
+                    }
+                )
+            finally:
+                _thread_state.skip_facet_or = False
+
+            counts = {
+                item['name']: item['count']
+                for item in facet_result
+                    .get('search_facets', {})
+                    .get('organization', {})
+                    .get('items', [])
+            }
+            for org in result:
+                if isinstance(org, dict):
+                    name = org.get('name')
+                    if name:
+                        org['package_count'] = counts.get(name, 0)
+
+        except Exception as e:
+            log.warning('Batched org count failed, falling back: %s', e)
+            for org in result:
+                if isinstance(org, dict) and 'package_count' in org:
+                    name = org.get('name') or org.get('id')
+                    if name:
+                        org['package_count'] = _auth_aware_package_count(
+                            context, 'organization', name 
+                        )
+
+    return result
+
+
 class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, toolkit.DefaultOrganizationForm):
     plugins.implements(plugins.IConfigurer)
     plugins.implements(plugins.ITemplateHelpers)
@@ -623,8 +968,11 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
     plugins.implements(plugins.IFacets)
     plugins.implements(plugins.IPackageController, inherit=True)
     plugins.implements(plugins.IOrganizationController, inherit=True) 
+    plugins.implements(plugins.IActions)
+    plugins.implements(plugins.IGroupController, inherit=True)
 
     def before_dataset_index(self, pkg_dict):
+        # From Grant (organization/group)
         owner_org = pkg_dict.get('owner_org')
 
         if owner_org:
@@ -635,24 +983,161 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
                 )
                 extras = org.get('extras', [])
 
+                # nature_based, pipeline_stage, grant_cycle, state_abbr_org
                 for extra in extras:
-                    if extra.get('key') == 'nature_based' and extra.get('state') == 'active':
+                    if extra.get('state') == 'active':
                         value = extra.get('value')
-                        if value:
-                            if isinstance(value, list):
-                                nature_types = value
-                            else:
-                                nature_types = parse_postgres_array(value)
-                            if nature_types:
-                                pkg_dict['nature_based'] = nature_types
+                        key = extra.get('key')
+                        # Multi-Valued facets
+                        if key in ['nature_based', 'pipeline_stage', 'state_abbr_org']:
+                            if value:
+                                if isinstance(value, list):
+                                    value_list = value
+                                else:
+                                    value_list = parse_postgres_array(value)
+                                if value_list:
+                                    pkg_dict[key] = value_list
+                            continue
+                        # Single-Valued facet
+                        if key == 'grant_cycle':
+                            if value and value.strip():
+                                pkg_dict['grant_cycle'] = value.strip()
+                            continue
+
+                # groups
+                owner_group_id = None
+                for extra in extras:
+                    if extra.get('key') == 'owner_group':
+                        owner_group_id = extra.get('value')
                         break
+                if owner_group_id:
+                    try:
+                        group = toolkit.get_action('group_show')(
+                            {'ignore_auth': True, '__skip_package_count': True},
+                            {'id': owner_group_id}
+                        )
+                        group_name = group.get('name')
+                        if group_name:
+                            # Override the groups field so the facet reflects
+                            # the org→program relationship, not the member table
+                            pkg_dict['groups'] = [group_name]
+                    except Exception as e:
+                        log.warning(
+                            'Could not resolve owner_group "%s" for org "%s": %s',
+                            owner_group_id, owner_org, e
+                        )
+                else:
+                    # No owner_group on this org → dataset belongs to no program
+                    pkg_dict['groups'] = []
+                                    
             except Exception as e:
                 log.error('before_dataset_index error: {}'.format(e))
 
+        # From Resources (parse from validated_data_dict since resources aren't available as dicts)
+        doc_types = set()
+        metrics = set()
+        monitoring_stages = set()
+        validated = pkg_dict.get('validated_data_dict')
+        if validated:
+            try:
+                full_dict = json.loads(validated)
+                for resource in full_dict.get('resources', []):
+                    dt = resource.get('doc_type')
+                    if dt and dt.strip():
+                        doc_types.add(dt.strip())
+                    for m in resource.get('metric', []) or []:
+                        if m and m.strip():
+                            metrics.add(m.strip())
+                    for ms in resource.get('monitoring_stages', []) or []:
+                        if ms and ms.strip():
+                            monitoring_stages.add(ms.strip())
+            except Exception as e:
+                log.warning('Could not parse validated_data_dict for resource fields: %s', e)
+        if doc_types:
+            pkg_dict['doc_type'] = list(doc_types)
+        if metrics:
+            pkg_dict['metric'] = list(metrics)
+        if monitoring_stages:
+            pkg_dict['monitoring_stages'] = list(monitoring_stages)
+
         return pkg_dict
-    
+
+    def before_dataset_search(self, search_params):
+        """
+        Convert same-facet multiple selections from AND to OR logic.
+        Uses plain Solr OR syntax (no local params).
+        Cross-facet remains AND.
+        """
+        # Skip if this is a secondary facet-count search
+        if getattr(_thread_state, 'skip_facet_or', False):
+            return search_params
+
+        # Guard against non-request contexts (CLI reindex, tests, API)
+        try:
+            args = request.args
+        except RuntimeError:
+            return search_params
+
+        # All facets we manage for multi-select OR behavior
+        managed_facets = [
+            'groups', 'organization', 'nature_based', 'grant_cycle',
+            'pipeline_stage', 'doc_type', 'metric', 'monitoring_stages',
+            'res_format', 'state_abbr_org'
+        ]
+
+        # Find which managed facets have any selected values
+        active_facets = {}
+        for param in managed_facets:
+            values = args.getlist(param)
+            if values:
+                active_facets[param] = values
+
+        if not active_facets:
+            return search_params
+
+        try:
+            # --- Remove CKAN's default individual fq entries for managed facets ---
+            fq = search_params.get('fq', '')
+
+            for facet_name, values in active_facets.items():
+                for value in values:
+                    # Remove patterns like: facet_name:"value"
+                    pattern = r'\s*' + re.escape(facet_name) + r':"' + re.escape(value) + r'"'
+                    fq = re.sub(pattern, '', fq)
+
+            # Also clean fq_list
+            existing_fq_list = list(search_params.get('fq_list', []) or [])
+            cleaned_fq_list = []
+            for fq_item in existing_fq_list:
+                keep = True
+                for facet_name, values in active_facets.items():
+                    for value in values:
+                        if '%s:"%s"' % (facet_name, value) in fq_item:
+                            keep = False
+                            break
+                    if not keep:
+                        break
+                if keep:
+                    cleaned_fq_list.append(fq_item)
+
+            # --- Add OR clauses (plain syntax, no local params) ---
+            for facet_name, values in active_facets.items():
+                if len(values) == 1:
+                    fq += ' %s:"%s"' % (facet_name, values[0])
+                else:
+                    or_clause = ' OR '.join('%s:"%s"' % (facet_name, v) for v in values)
+                    fq += ' (%s)' % or_clause
+
+            search_params['fq'] = fq.strip()
+            search_params['fq_list'] = cleaned_fq_list
+
+        except Exception as e:
+            log.error('before_dataset_search error: %s', e)
+
+        return search_params
+
     def edit(self, entity):
-        # Check if this is an organization, not a package or group
+        """Reindex all datasets belonging to this org after org is updated."""
         try:
             if not getattr(entity, 'is_organization', False):
                 return
@@ -662,25 +1147,95 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         try:
             org_id = entity.id
 
-            # Get all datasets for this org
+            # Force the session to flush so new data is readable
+            model.Session.flush()
+
+            # Small delay isn't needed if flush works, but invalidate any action cache
+            # by passing fresh context
             packages = toolkit.get_action('package_search')(
-                {'ignore_auth': True},
+                {'ignore_auth': True, 'use_cache': False},
                 {
-                    'fq': 'owner_org:{}'.format(org_id),
+                    'fq': 'owner_org:%s' % org_id,
                     'rows': 1000,
-                    'fl': 'id'
+                    'include_private': True,
                 }
             )
 
             from ckan.lib.search import rebuild
+            count = 0
             for pkg in packages.get('results', []):
                 try:
                     rebuild(pkg['id'])
+                    count += 1
                 except Exception as e:
-                    log.error('Error reindexing dataset {}: {}'.format(pkg['id'], e))
+                    log.error('Error reindexing dataset %s: %s', pkg['id'], e)
+
+            log.info('Reindexed %d datasets for org %s', count, org_id)
 
         except Exception as e:
             log.error('Error reindexing datasets for org "{}": {}'.format(entity.title, e))
+
+    def read(self, entity):
+        """Populate g.search_facets for the group page so facet_list snippets work."""
+        # Skip if not in a web request context (e.g. CLI reindex)
+        try:
+            from flask import has_request_context
+            if not has_request_context():
+                return
+        except Exception:
+            return
+
+        try:
+            group_name = entity.name
+            if not group_name:
+                return
+
+            try:
+                user = toolkit.g.user
+            except Exception:
+                user = None
+
+            context = {'user': user} if user else {}
+
+            # Build fq from any active URL filters
+            managed_facets = [
+                'organization', 'nature_based', 'grant_cycle',
+                'pipeline_stage', 'doc_type', 'metric', 'monitoring_stages',
+                'res_format', 'state_abbr_org'
+            ]
+
+            fq_parts = ['groups:"%s"' % group_name]
+
+            try:
+                for facet in managed_facets:
+                    values = request.args.getlist(facet)
+                    if values:
+                        if len(values) == 1:
+                            fq_parts.append('%s:"%s"' % (facet, values[0]))
+                        else:
+                            or_clause = ' OR '.join('%s:"%s"' % (facet, v) for v in values)
+                            fq_parts.append('(%s)' % or_clause)
+            except RuntimeError:
+                pass
+
+            _thread_state.skip_facet_or = True
+            try:
+                result = toolkit.get_action('package_search')(context, {
+                    'q': '',
+                    'fq': ' '.join(fq_parts),
+                    'rows': 0,
+                    'facet.field': managed_facets,
+                    'facet.limit': -1,
+                    'facet.mincount': 1,
+                    'include_private': bool(user),
+                })
+            finally:
+                _thread_state.skip_facet_or = False
+
+            toolkit.g.search_facets = result.get('search_facets', {})
+
+        except Exception as e:
+            log.warning('Failed to populate g.search_facets for group page: %s', e)
 
     def dataset_facets(self, facets_dict, package_type):
         '''Add new search facet (filter) for datasets.
@@ -692,36 +1247,36 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         facets_dict['groups'] = 'Programs'
         facets_dict['organization'] = facets_dict.pop('organization')
         facets_dict['organization'] = "Grants"
+
+        facets_dict['grant_cycle'] = plugins.toolkit._("Grant Cycles")
         facets_dict['nature_based'] = plugins.toolkit._("Nature-based Solutions")
-        facets_dict['vocab_metric_classes'] = plugins.toolkit._("Metric Classes")
-        facets_dict['vocab_restoration_activities'] = plugins.toolkit._("Restoration Activities")
-        facets_dict['vocab_monitoring_parameters'] = plugins.toolkit._("Monitoring Parameters")
-        facets_dict['vocab_counties'] = plugins.toolkit._("Counties")
-        facets_dict['vocab_state_abbreviations'] = plugins.toolkit._("States and Territories")
-        facets_dict['grant_cycles'] = plugins.toolkit._("Grant Cycles")
         facets_dict['pipeline_stage'] = plugins.toolkit._("Pipeline Stages")
+        facets_dict['doc_type'] = plugins.toolkit._("File/Document Type")
         facets_dict['res_format'] = facets_dict.pop('res_format')
-        facets_dict['tags'] = facets_dict.pop('tags')
+        facets_dict['metric'] = plugins.toolkit._("Monitoring Metrics")
+        facets_dict['monitoring_stages'] = plugins.toolkit._("Monitoring Stages")
+        facets_dict['state_abbr_org'] = plugins.toolkit._("States and Territories")
         facets_dict.pop('license_id')
+        facets_dict.pop('tags')
 
         # Return the updated facet dict.
         return facets_dict
 
     def group_facets(self, facets_dict, group_type, package_type):
         # This changes the facet order and removes some facets from the filter list.
-        facets_dict['organization'] = facets_dict.pop('organization')
+        # Mirror dataset_facets - 'groups' excluded since page
         facets_dict['organization'] = "Grants"
-        facets_dict['vocab_metric_classes'] = plugins.toolkit._("Metric Classes")
-        facets_dict['vocab_restoration_activities'] = plugins.toolkit._("Restoration Activities")
-        facets_dict['vocab_counties'] = plugins.toolkit._("Counties")
-        facets_dict['vocab_state_abbreviations'] = plugins.toolkit._("States and Territories")
-        facets_dict['grant_cycles'] = plugins.toolkit._("Grant Cycles")
-        facets_dict['nature_based_solutions'] = plugins.toolkit._("Nature-based Solutions")
-        facets_dict['grant_statuses'] = plugins.toolkit._("Grant Statuses")
+        facets_dict['grant_cycle'] = plugins.toolkit._("Grant Cycles")
+        facets_dict['nature_based'] = plugins.toolkit._("Nature-based Solutions")
+        facets_dict['pipeline_stage'] = plugins.toolkit._("Pipeline Stages")
+        facets_dict['doc_type'] = plugins.toolkit._("File/Document Type")
         facets_dict['res_format'] = facets_dict.pop('res_format')
-        facets_dict.pop('tags')
-        facets_dict.pop('license_id')
-        facets_dict.pop('groups')
+        facets_dict['metric'] = plugins.toolkit._("Monitoring Metrics")
+        facets_dict['monitoring_stages'] = plugins.toolkit._("Monitoring Stages")
+        facets_dict['state_abbr_org'] = plugins.toolkit._("States and Territories")
+        facets_dict.pop('license_id', None)
+        facets_dict.pop('tags', None)
+        facets_dict.pop('groups', None)   # redundant - already on the group page
 
         # Return the updated facet dict.
 
@@ -733,7 +1288,7 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         facets_dict['vocab_restoration_activities'] = plugins.toolkit._("Restoration Activities")
         facets_dict['vocab_counties'] = plugins.toolkit._("Counties")
         facets_dict['vocab_state_abbreviations'] = plugins.toolkit._("States and Territories")
-        facets_dict['grant_cycles'] = plugins.toolkit._("Grant Cycles")
+        facets_dict['grant_cycle'] = plugins.toolkit._("Grant Cycles")
         facets_dict['nature_based_solutions'] = plugins.toolkit._("Nature-based Solutions")
         facets_dict['grant_statuses'] = plugins.toolkit._("Grant Statuses")
         facets_dict['res_format'] = facets_dict.pop('res_format')
@@ -967,8 +1522,19 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
             'get_satisfied_metrics' : get_satisfied_metrics,
             'get_nbs_from_package_id': get_nbs_from_package_id,
             'doc_types': doc_types,
-            'monitoring_stages': monitoring_stages
+            'monitoring_stages': monitoring_stages,
+            'remove_grant_prefix': remove_grant_prefix,
+            'facet_url_add': facet_url_add,
+            'facet_url_remove': facet_url_remove,
             }
+    
+    def get_actions(self):
+        return {
+            'group_show':         _chained_group_show,
+            'group_list':         _chained_group_list,
+            'organization_show':  _chained_organization_show,
+            'organization_list':  _chained_organization_list,
+        }
 
     # IConfigurer
 
@@ -1102,6 +1668,7 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
             'get_extra' : get_extra,
             'get_value_or_extra' : get_value_or_extra,
             'replace_keys' : replace_keys,
+            'remove_grant_prefix' : remove_grant_prefix,
             }
 
     # IConfigurer
