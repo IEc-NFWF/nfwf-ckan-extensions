@@ -467,6 +467,16 @@ def sysadmin_not_empty(key, data, errors, context):
     except toolkit.NotAuthorized:
         toolkit.get_validator('ignore_missing')(key, data, errors, context)
 
+def required_for_new_resource(key, data, errors, context):
+    # Require this resource field only for newly-added resources (which have no id yet)
+    # Without this, any legacy siblings that are missing a field will cause the validation to fail
+    resource_index = key[1]
+    resource_id = data.get(('resources', resource_index, 'id'))
+    if resource_id:
+        toolkit.get_validator('ignore_missing')(key, data, errors, context)
+    else:
+        toolkit.get_validator('not_empty')(key, data, errors, context)
+
 def extras_has_value(extras_list, key, value):
     if extras_list:
         for extra in extras_list:
@@ -1383,10 +1393,12 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
         })
         # Custom resource schema:
         cast(Schema, schema['resources']).update({
-                'name': [toolkit.get_validator('not_empty')],
+                'name': [required_for_new_resource],
+                                # 'name': [toolkit.get_validator('not_empty')],
                 'metric': [toolkit.get_validator('ignore_missing'),
                         toolkit.get_converter('convert_to_list_if_string')],
-                'doc_type': [toolkit.get_validator('not_empty')],
+                'doc_type': [required_for_new_resource],
+                                # 'doc_type': [toolkit.get_validator('not_empty')],
                 'monitoring_stages': [toolkit.get_validator('ignore_missing'),
                         toolkit.get_converter('convert_to_list_if_string')],
                 'reporting_years_resource': [toolkit.get_validator('ignore_missing'),
