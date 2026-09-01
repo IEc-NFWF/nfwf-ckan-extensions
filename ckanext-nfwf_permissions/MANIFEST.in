@@ -1,0 +1,3 @@
+include README.md
+include requirements.txt
+recursive-include ckanext/nfwf_permissions *.html *.json *.js *.less *.css *.mo
