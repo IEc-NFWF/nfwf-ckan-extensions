@@ -12,6 +12,7 @@ Stub responses carry ``"stub": true`` so it is obvious in the browser's network
 tab that the data is not real yet. That key disappears when the real
 implementation lands, and nothing should depend on it.
 """
+from ckan import authz
 from ckan.plugins import toolkit
 
 from ckanext.nfwf_permissions import fixtures, roles
@@ -25,6 +26,9 @@ __all__ = [
     u'nfwf_user_reject',
     u'nfwf_user_deactivate',
     u'nfwf_role_options',
+    # Chained core actions. Real, not stubs -- see the bottom of this file.
+    u'organization_create',
+    u'organization_update',
 ]
 
 #: US 0117 slide 4: "Default display 20 users".
@@ -341,3 +345,68 @@ def _role_dict(user):
 
 def _ids(records):
     return [record[u'id'] for record in records]
+
+
+# -- Chained core actions ----------------------------------------------------
+#
+# These are the real thing, not stubs. ``logic/auth.py`` can decide *whether*
+# a Program Administrator may create or edit a grant, but not *which program*
+# the grant may be filed under -- that depends on the submitted data, and it
+# has to hold on update as well as create, or a Program Administrator could
+# take a grant they legitimately hold and move it into someone else's program.
+
+def _assert_grant_belongs_to_an_administered_program(context, data_dict):
+    """Refuse to file a grant under a program the caller does not administer.
+
+    Applies to create, update *and* patch: ``organization_patch`` merges onto
+    the stored record and then calls ``organization_update``, so checking here
+    sees the effective value rather than a partial one.
+
+    Two exemptions.
+
+    ``ignore_auth`` is honoured, mirroring ``authz.is_authorized``
+    (``ckan/authz.py:207-208``). Without it every internal caller that
+    deliberately bypasses authorization -- the test factories, the role
+    migration, ``ckan`` CLI commands -- would be refused.
+
+    Platform Administrators are exempt outright. They own the whole site, and
+    the 30 grants that legitimately belong to no program at all could not exist
+    otherwise, since ``owner_group`` would have to name a program they
+    administer.
+    """
+    if context.get(u'ignore_auth'):
+        return
+
+    user = context.get(u'user')
+    if authz.is_sysadmin(user):
+        return
+
+    submitted = (data_dict or {}).get(u'owner_group')
+    # Resolve first: a form may post a name while ``programs_for_user`` deals
+    # in ids, and an unknown or deleted reference resolves to None.
+    program = roles.program_id(submitted) if submitted else None
+    if program and program in roles.programs_for_user(
+            user, [roles.CAPACITY_ADMIN]):
+        return
+
+    raise toolkit.NotAuthorized(toolkit._(
+        u'A grant must belong to a program you administer.'))
+
+
+@toolkit.chained_action
+def organization_create(original_action, context, data_dict):
+    """Enforce which program a new grant is filed under."""
+    _assert_grant_belongs_to_an_administered_program(context, data_dict)
+    return original_action(context, data_dict)
+
+
+@toolkit.chained_action
+def organization_update(original_action, context, data_dict):
+    """Enforce that a grant cannot be moved out of the caller's program.
+
+    Also stops a Program Administrator orphaning a grant by clearing its
+    ``owner_group``, which would put it beyond their own reach and everyone
+    else's but a Platform Administrator's.
+    """
+    _assert_grant_belongs_to_an_administered_program(context, data_dict)
+    return original_action(context, data_dict)
