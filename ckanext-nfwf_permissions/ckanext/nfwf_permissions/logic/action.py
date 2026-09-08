@@ -1,16 +1,14 @@
 # encoding: utf-8
-"""API contract for Tasks 117 and 126.
+"""The ``nfwf_user_*`` API for Tasks 117 and 126, plus chained core actions.
 
-Every action here is a **stub**. It authorizes the caller and validates its
-input for real, then returns realistically-shaped fixture data instead of
-touching the database. The names, parameters, schemas and response shapes are
-the contract that the user management screen (Task 117) and the Manage Roles
-modal (Task 126) build against; the bodies get replaced as Task 125 lands,
-without any caller changing.
+These were stubs returning fixture data. They now read and write the database,
+with the names, parameters, schemas and response shapes unchanged -- those are
+the contract the user management screen (Task 117) and the Manage Roles modal
+(Task 126) build against. The ``"stub": true`` marker the stub responses
+carried is gone, which is the only difference a caller can observe.
 
-Stub responses carry ``"stub": true`` so it is obvious in the browser's network
-tab that the data is not real yet. That key disappears when the real
-implementation lands, and nothing should depend on it.
+Record shapes and status storage live in ``accounts``, so this stays a thin
+layer of authorize, validate, delegate.
 """
 import logging
 
@@ -18,7 +16,7 @@ from ckan import authz, model
 from ckan.lib import search
 from ckan.plugins import toolkit
 
-from ckanext.nfwf_permissions import fixtures, roles
+from ckanext.nfwf_permissions import accounts, roles
 from ckanext.nfwf_permissions.logic import schema
 
 log = logging.getLogger(__name__)
@@ -34,6 +32,9 @@ __all__ = [
     # Chained core actions. Real, not stubs -- see the bottom of this file.
     u'organization_create',
     u'organization_update',
+    u'member_create',
+    u'organization_member_create',
+    u'group_member_create',
 ]
 
 #: US 0117 slide 4: "Default display 20 users".
@@ -75,41 +76,24 @@ def nfwf_user_list(context, data_dict):
     toolkit.check_access(u'nfwf_user_list', context, data_dict)
     data = _validated(data_dict, schema.nfwf_user_list_schema(), context)
 
-    statuses = data.get(u'statuses') or roles.DEFAULT_VISIBLE_STATUSES
     limit = min(data.get(u'limit', DEFAULT_LIMIT), MAX_LIMIT)
     offset = data.get(u'offset', 0)
 
-    matches = [user for user in fixtures.users()
-               if user[u'status'] in statuses]
-
-    query = data.get(u'q')
-    if query:
-        needle = query.strip().lower()
-        matches = [user for user in matches
-                   if needle in user[u'display_name'].lower()
-                   or needle in user[u'email'].lower()
-                   or needle in user[u'name'].lower()]
-
-    role = data.get(u'role')
-    if role:
-        matches = [user for user in matches if user[u'role'] == role]
-
-    program_id = data.get(u'program_id')
-    if program_id:
-        matches = [user for user in matches
-                   if program_id in _ids(user[u'programs'])]
-
-    grant_id = data.get(u'grant_id')
-    if grant_id:
-        matches = [user for user in matches
-                   if grant_id in _ids(user[u'grants'])]
+    # Paged here rather than in SQL: `role` and the deactivated/rejected split
+    # are derived rather than stored, so `accounts.search_users` resolves them
+    # in Python and returns every match. See its docstring for why.
+    matches = accounts.search_users(
+        q=data.get(u'q'),
+        statuses=data.get(u'statuses'),
+        role=data.get(u'role'),
+        program_id=data.get(u'program_id'),
+        grant_id=data.get(u'grant_id'))
 
     return {
         u'count': len(matches),
         u'limit': limit,
         u'offset': offset,
         u'results': matches[offset:offset + limit],
-        u'stub': True,
     }
 
 
@@ -125,7 +109,7 @@ def nfwf_user_role_show(context, data_dict):
     toolkit.check_access(u'nfwf_user_role_show', context, data_dict)
     data = _validated(data_dict, schema.nfwf_user_id_schema(), context)
 
-    return _role_dict(fixtures.user_by_id_or_name(data[u'id']))
+    return accounts.role_record(_user_or_404(data[u'id']))
 
 
 @toolkit.side_effect_free
@@ -149,8 +133,7 @@ def nfwf_role_options(context, data_dict):
             u'label': roles.ROLE_LABELS[role],
             u'assigned_to': roles.ROLE_SCOPE[role],
         } for role in roles.ROLES],
-        u'programs': fixtures.programs(),
-        u'stub': True,
+        u'programs': accounts.programs(),
     }
 
 
@@ -196,28 +179,16 @@ def nfwf_user_role_set(context, data_dict):
     grant_ids = data.get(u'grant_ids', [])
     _check_assignment_scope(role, program_ids, grant_ids)
 
-    user = fixtures.user_by_id_or_name(data[u'id'])
-    # Stub: echo back what *would* be stored. The real implementation writes
-    # member rows (or the sysadmin flag) and returns the same shape.
-    user[u'role'] = role
-    if roles.accepts_programs(role):
-        user[u'programs'] = _resolved(
-            u'program_ids', program_ids, fixtures.programs_by_id(program_ids))
-        user[u'grants'] = []
-    elif roles.accepts_grants(role):
-        user[u'grants'] = _resolved(
-            u'grant_ids', grant_ids, fixtures.grants_by_id(grant_ids))
-        user[u'programs'] = []
-    # else Platform Administrator: keep both lists exactly as they were.
-    #
-    # Only this role retains. Switching *between* program and grant roles has to
-    # clear the other list, because for those roles the assignment IS the
-    # permission -- leaving an 'editor' row behind would leave real edit rights
-    # behind with it. The sysadmin flag already implies more than any assignment
-    # does, so retaining is harmless there and makes a later demotion restore
-    # what the user had.
+    user = _user_or_404(data[u'id'])
+    programs = _resolved(u'program_ids', program_ids, False)
+    grants = _resolved(u'grant_ids', grant_ids, True)
 
-    return _role_dict(user)
+    _apply_role(context, user, role, programs, grants)
+
+    # The writes above changed what `roles` would answer, and it memoizes per
+    # request, so without clearing this the record below describes the old state.
+    roles.clear_cache()
+    return accounts.role_record(model.User.get(user.id))
 
 
 def nfwf_user_approve(context, data_dict):
@@ -274,13 +245,9 @@ def _set_status(context, data_dict, action_name, new_status):
     toolkit.check_access(action_name, context, data_dict)
     data = _validated(data_dict, schema.nfwf_user_id_schema(), context)
 
-    user = fixtures.user_by_id_or_name(data[u'id'])
-    # Stub: the real implementation writes user.state plus the plugin_extras key
-    # described in roles.STATUS_STORAGE, via user_update -- which is why the
-    # ckanext-oauth2 block has to be relaxed first.
-    user[u'status'] = new_status
-    user[u'status_label'] = roles.status_label(new_status)
-    return user
+    user = _user_or_404(data[u'id'])
+    return accounts.user_record(
+        accounts.set_status(context, user, new_status))
 
 
 def _check_assignment_scope(role, program_ids, grant_ids):
@@ -316,40 +283,103 @@ def _check_assignment_scope(role, program_ids, grant_ids):
         raise toolkit.ValidationError(errors)
 
 
-def _resolved(field, wanted_ids, found):
-    """Reject ids that do not exist instead of silently dropping them.
+def _user_or_404(id_or_name):
+    """Look up a user by id or name, or raise ObjectNotFound."""
+    user = model.User.get(id_or_name)
+    if user is None:
+        raise toolkit.ObjectNotFound(
+            toolkit._(u'User not found: {0}').format(id_or_name))
+    return user
 
-    ``fixtures.programs_by_id`` and ``grants_by_id`` skip ids they do not
-    recognise, so a typo would otherwise save as the role with *no* assignment
-    while the response still reported success -- a silent partial write. The
-    real implementation must not do that either: an unknown program or grant is
-    a failed save, not an empty one.
+
+def _resolved(field, wanted_ids, is_organization):
+    """Look up every id, rejecting any that does not exist.
+
+    An unknown program or grant has to be a *failed* save, not an empty one.
+    Skipping the ones we cannot find would store the role with no assignment at
+    all while the response still reported success -- a silent partial write,
+    and for a program role that means a user who can see nothing wondering why.
     """
-    missing = [wanted for wanted in wanted_ids if wanted not in _ids(found)]
+    if not wanted_ids:
+        return []
+
+    found = model.Session.query(model.Group).filter(
+        model.Group.id.in_(list(wanted_ids)),
+        model.Group.state == u'active',
+        model.Group.is_organization.is_(is_organization)).all()
+    by_id = {group.id: group for group in found}
+
+    missing = [wanted for wanted in wanted_ids if wanted not in by_id]
     if missing:
         raise toolkit.ValidationError({
             field: [toolkit._(u'Unknown ids: {0}').format(u', '.join(missing))]
         })
-    return found
+    return [by_id[wanted] for wanted in wanted_ids]
 
 
-def _role_dict(user):
-    role = user.get(u'role')
-    return {
-        u'user_id': user[u'id'],
-        u'user_name': user[u'name'],
-        u'display_name': user[u'display_name'],
-        u'role': role,
-        u'role_label': roles.role_label(role),
-        u'programs': user.get(u'programs', []),
-        u'grants': user.get(u'grants', []),
-        u'assignments_in_effect': roles.assignments_in_effect(role),
-        u'stub': True,
-    }
+def _apply_role(context, user, role, programs, grants):
+    """Make the stored assignments say exactly ``role`` and nothing else.
+
+    Order matters. The other scope is cleared *before* the wanted one is
+    written, because the chained membership actions below refuse to leave a user
+    holding both a program and a grant assignment -- writing first would trip
+    the extension's own rule halfway through.
+    """
+    _set_sysadmin(context, user, role == roles.PLATFORM_ADMIN)
+
+    if role == roles.PLATFORM_ADMIN:
+        # Retained, not deleted. The sysadmin flag already implies more than
+        # any assignment does, so leaving them costs nothing and means a later
+        # demotion gives the user back what they had.
+        return
+
+    capacity = {
+        roles.PROGRAM_ADMIN: roles.CAPACITY_ADMIN,
+        roles.PROGRAM_READER: roles.CAPACITY_MEMBER,
+        roles.GRANT_EDITOR: roles.CAPACITY_EDITOR,
+    }[role]
+
+    if roles.accepts_programs(role):
+        _replace_memberships(context, user, True, [], None)
+        _replace_memberships(context, user, False, programs, capacity)
+    else:
+        _replace_memberships(context, user, False, [], None)
+        _replace_memberships(context, user, True, grants, capacity)
 
 
-def _ids(records):
-    return [record[u'id'] for record in records]
+def _replace_memberships(context, user, is_organization, groups, capacity):
+    """Make the user's memberships of one kind be exactly ``groups``.
+
+    Uses the member actions rather than the model so CKAN's own bookkeeping
+    runs. They are called with ``ignore_auth`` because this *is* the sanctioned
+    path -- it has already validated the role model, and the chained checks
+    below exist to catch changes that come in any other way.
+    """
+    internal = {u'user': context.get(u'user'), u'ignore_auth': True}
+
+    held = (roles.grants_for_user(user) if is_organization
+            else roles.programs_for_user(user))
+    wanted = [group.id for group in groups]
+
+    for group_id in sorted(set(held) - set(wanted)):
+        toolkit.get_action(u'member_delete')(dict(internal), {
+            u'id': group_id, u'object': user.id, u'object_type': u'user'})
+
+    for group_id in wanted:
+        # member_create updates the capacity of an existing row rather than
+        # duplicating it, so this covers both adding and re-grading.
+        toolkit.get_action(u'member_create')(dict(internal), {
+            u'id': group_id, u'object': user.id, u'object_type': u'user',
+            u'capacity': capacity})
+
+    roles.clear_cache()
+
+
+def _set_sysadmin(context, user, wanted):
+    """Grant or revoke the sysadmin flag, which *is* the Platform Admin role."""
+    if bool(user.sysadmin) == wanted:
+        return
+    accounts.patch(context, user, sysadmin=wanted)
 
 
 # -- Chained core actions ----------------------------------------------------
@@ -466,3 +496,98 @@ def _reindex_if_program_changed(organization, before):
     # ones. Caught by the reindex test, which saw a moved grant's dataset still
     # visible to the previous program's readers.
     search.commit()
+
+
+# -- Chained membership actions ----------------------------------------------
+#
+# These guard the role model against changes that arrive by any route other
+# than nfwf_user_role_set -- the stock "Members" screens on a grant or a
+# program, and direct API calls.
+#
+# `ignore_auth` is honoured, which is not a loophole but a requirement:
+# CKAN's own `_group_or_org_create` makes the creating user an `admin` of a new
+# organization by calling member_create with ignore_auth set
+# (ckan/logic/action/create.py:773-784). Refusing retired capacities without
+# that exemption would make it impossible to create a grant at all.
+
+def _assert_membership_is_allowed(context, group_ref, user_ref, capacity):
+    """Refuse a membership that would break the role model.
+
+    Two rules, both from the redesign:
+
+    * **The retired grant capacities.** Grant `member` and grant `admin` are
+      gone; on a grant the only role is Grant Editor. Production still holds
+      585 grant-`admin` and 59 grant-`member` rows, which the migration reports
+      rather than converts -- but nothing new should be added.
+    * **One role per user.** Settled 2026-08-19, and a conflict-of-interest
+      control rather than a convenience: Program Reader is for outside
+      contractors who are typically conflicted out of applying for grant funds,
+      so it must not be combinable with a grant role. That makes it a
+      server-side rule, not something the UI can be trusted to hide.
+    """
+    if context.get(u'ignore_auth'):
+        return
+
+    group = model.Group.get(group_ref)
+    if group is None:
+        return  # Let the original action raise its own NotFound.
+
+    user = model.User.get(user_ref)
+    if user is None:
+        return
+
+    if group.is_organization and capacity in roles.RETIRED_GRANT_CAPACITIES:
+        raise toolkit.ValidationError({u'capacity': [toolkit._(
+            u'{0} is no longer a role on a grant. Use {1}.').format(
+                capacity, roles.ROLE_LABELS[roles.GRANT_EDITOR])]})
+
+    # Would this leave the user holding both scopes at once?
+    other_scope = (roles.programs_for_user(user) if group.is_organization
+                   else roles.grants_for_user(user))
+    if other_scope:
+        held = roles.role_label(roles.user_role(user)) or toolkit._(u'a role')
+        raise toolkit.ValidationError({u'object': [toolkit._(
+            u'{0} already holds {1}. A user has one role at a time, so remove '
+            u'that first.').format(user.name, held)]})
+
+
+@toolkit.chained_action
+def member_create(original_action, context, data_dict):
+    """Guard the role model on the generic membership action.
+
+    Also covers removal indirectly: `member_delete` defers its *authorization*
+    here, though not its validation, since removing a row never creates a
+    conflict.
+    """
+    data_dict = data_dict or {}
+    if data_dict.get(u'object_type') == u'user':
+        _assert_membership_is_allowed(
+            context, data_dict.get(u'id'), data_dict.get(u'object'),
+            data_dict.get(u'capacity'))
+    return original_action(context, data_dict)
+
+
+@toolkit.chained_action
+def organization_member_create(original_action, context, data_dict):
+    """Guard the role model on a grant's Members screen.
+
+    This one speaks `role` and `username` where member_create speaks `capacity`
+    and `object`; same rule, different vocabulary.
+    """
+    data_dict = data_dict or {}
+    _assert_membership_is_allowed(
+        context, data_dict.get(u'id'),
+        data_dict.get(u'username') or data_dict.get(u'id_or_name'),
+        data_dict.get(u'role'))
+    return original_action(context, data_dict)
+
+
+@toolkit.chained_action
+def group_member_create(original_action, context, data_dict):
+    """Guard the role model on a program's Members screen."""
+    data_dict = data_dict or {}
+    _assert_membership_is_allowed(
+        context, data_dict.get(u'id'),
+        data_dict.get(u'username') or data_dict.get(u'id_or_name'),
+        data_dict.get(u'role'))
+    return original_action(context, data_dict)
