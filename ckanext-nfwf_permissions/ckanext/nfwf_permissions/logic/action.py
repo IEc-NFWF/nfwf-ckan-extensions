@@ -12,11 +12,16 @@ Stub responses carry ``"stub": true`` so it is obvious in the browser's network
 tab that the data is not real yet. That key disappears when the real
 implementation lands, and nothing should depend on it.
 """
-from ckan import authz
+import logging
+
+from ckan import authz, model
+from ckan.lib import search
 from ckan.plugins import toolkit
 
 from ckanext.nfwf_permissions import fixtures, roles
 from ckanext.nfwf_permissions.logic import schema
+
+log = logging.getLogger(__name__)
 
 __all__ = [
     u'nfwf_user_list',
@@ -407,6 +412,57 @@ def organization_update(original_action, context, data_dict):
     Also stops a Program Administrator orphaning a grant by clearing its
     ``owner_group``, which would put it beyond their own reach and everyone
     else's but a Platform Administrator's.
+
+    Reindexes the grant's datasets when the program actually changes, because
+    their permission labels are derived from it -- see ``labels``.
     """
     _assert_grant_belongs_to_an_administered_program(context, data_dict)
-    return original_action(context, data_dict)
+
+    before = roles.program_id_for_grant(data_dict.get(u'id'))
+    result = original_action(context, data_dict)
+    _reindex_if_program_changed(result, before)
+    return result
+
+
+def _reindex_if_program_changed(organization, before):
+    """Reindex a grant's datasets if its ``owner_group`` moved.
+
+    Permission labels are written into Solr at index time, so a grant that
+    changes program leaves every one of its datasets carrying the *old*
+    program's label until something reindexes them. Nothing in CKAN does that
+    on its own.
+
+    This is the reason ``roles.clear_cache`` exists: ``program_id_for_grant``
+    is memoized per request, and it was already asked this question a few lines
+    above, so without clearing it the "after" value would be the stale "before"
+    one and a real move would look like no change at all.
+
+    Doing it synchronously is a deliberate choice. The work is bounded by one
+    grant -- the largest holds 27 datasets and the average is four -- so it is
+    far cheaper than a background job that needs a worker process to exist,
+    which this deployment does not run. A bulk change of ``owner_group``, as the
+    role migration does, still needs a full ``ckan search-index rebuild``.
+    """
+    roles.clear_cache()
+    if roles.program_id_for_grant(organization[u'id']) == before:
+        return
+
+    package_ids = [row[0] for row in model.Session.query(model.Package.id)
+                   .filter(model.Package.owner_org == organization[u'id'])
+                   .filter(model.Package.state != u'deleted').all()]
+    if not package_ids:
+        return
+
+    log.info(u'Grant %s changed program; reindexing %d dataset(s)',
+             organization[u'id'], len(package_ids))
+    search.rebuild(package_ids=package_ids, quiet=True)
+
+    # The explicit commit is required, not belt and braces. `rebuild`'s
+    # package_ids branch calls `update_dict(pkg_dict, True)` -- hard-coding
+    # defer_commit=True regardless of what the caller asked for -- and the
+    # `model.Session.commit()` at the end of it commits the *database* session,
+    # not Solr (ckan/lib/search/__init__.py:198-201, 250). So without this the
+    # new labels sit uncommitted and every search still answers from the old
+    # ones. Caught by the reindex test, which saw a moved grant's dataset still
+    # visible to the previous program's readers.
+    search.commit()

@@ -1,12 +1,19 @@
 # encoding: utf-8
 """NFWF roles and permissions -- Task 125.
 
-At this stage the plugin registers only the API contract that Tasks 117 and 126
-build against, so the front-end work is not blocked on the backend. Still to
-come, on top of this and without changing any signature:
+What this plugin now provides:
 
-* ``IPermissionLabels`` for program-wide visibility of private datasets
-* the full permission matrix in ``logic/auth.py``
+* the ``nfwf_user_*`` API contract Tasks 117 and 126 build against -- still
+  stubbed bodies, real authorization and validation
+* the permission matrix in ``logic/auth.py``, which is what lets a Program
+  Administrator reach the grants in their program
+* chained ``organization_create`` / ``organization_update`` enforcing that a
+  grant belongs to a program the caller administers
+* ``IPermissionLabels`` in ``labels.py`` for program-wide visibility of private
+  datasets
+
+Still to come:
+
 * chained membership actions rejecting the retired grant capacities
 * ``ckan nfwf-permissions migrate-roles`` for the role migration
 
@@ -17,15 +24,22 @@ files mean effectively no merge conflicts with Tasks 117/126.
 import ckan.plugins as plugins
 import ckan.plugins.toolkit as toolkit
 
+from ckanext.nfwf_permissions.labels import NfwfPermissionLabels
+
 
 @toolkit.blanket.actions
 @toolkit.blanket.auth_functions
 @toolkit.blanket.validators
-class NfwfPermissionsPlugin(plugins.SingletonPlugin):
-    """Registers the ``nfwf_user_*`` actions, their auth functions and validators.
+class NfwfPermissionsPlugin(plugins.SingletonPlugin, NfwfPermissionLabels):
+    """Registers the actions, auth functions, validators and permission labels.
 
-    The blanket decorators pick these up automatically from
+    The blanket decorators pick the first three up automatically from
     ``logic/action.py``, ``logic/auth.py`` and ``logic/validators.py``, using the
     ``__all__`` declared in each.
+
+    ``IPermissionLabels`` is different: ``get_permission_labels`` returns the
+    plugin *object itself* and calls the label methods on it, so the behaviour
+    has to be inherited rather than registered. ``NfwfPermissionLabels`` keeps
+    that logic in its own module and testable on its own.
     """
-    pass
+    plugins.implements(plugins.IPermissionLabels)
