@@ -37,7 +37,7 @@
         <th scope="row" class="dataset-label">{{ _('State(s)') }}</th>
         <td class="dataset-details">{{ display('state_abbr_org') }}</td>
       </tr>
-      {% if h.check_access('sysadmin') %}
+      {% if h.nfwf_can_admin_grant() %}
         <tr>
           <th scope="row" class="dataset-label">{{ _('Funding Source(s)') }}</th>
           <td class="dataset-details">{{ display('funding_source') }}</td>

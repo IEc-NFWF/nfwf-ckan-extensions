@@ -443,6 +443,23 @@ def user_role(user):
     return _user_role(user_id)
 
 
+def administers_grants(user):
+    """May ``user`` administer grants at all -- anywhere, in any program?
+
+    True for Platform Administrators and Program Administrators, false for
+    everyone else. Used for the questions that are about *capability in
+    general* rather than about one particular grant: which fields a grant form
+    requires, and whether to render an administrative field at all. When the
+    question is "may they touch *this* grant", use
+    ``is_program_admin_for_grant`` instead, or let the auth functions answer it.
+
+    Deliberately expressed in terms of ``user_role`` rather than a fresh
+    membership query, so it cannot disagree with the role a user is reported as
+    holding.
+    """
+    return user_role(user) in (PLATFORM_ADMIN, PROGRAM_ADMIN)
+
+
 def is_program_admin_for_grant(user, grant):
     """Does ``user`` administer the program that ``grant`` belongs to?
 

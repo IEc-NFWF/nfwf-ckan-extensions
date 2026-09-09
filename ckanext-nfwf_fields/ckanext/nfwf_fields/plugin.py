@@ -467,6 +467,45 @@ def sysadmin_not_empty(key, data, errors, context):
     except toolkit.NotAuthorized:
         toolkit.get_validator('ignore_missing')(key, data, errors, context)
 
+def can_admin_grant(user=None):
+    """Whether this user administers grants, and so sees the admin-only fields.
+
+    Task 125 gave Program Administrators the ability to edit grants, so the
+    fields that used to be Platform-Administrator-only belong to them too. The
+    role model lives in ckanext-nfwf_permissions, which is the single source of
+    truth for it.
+
+    The import is deliberately soft. ckanext-nfwf_permissions does not have to
+    be *enabled* for this to work -- its roles module is plain database access
+    with no plugin behind it -- but if the package is not installed at all this
+    extension still has to function, and it then falls back to the previous
+    sysadmin-only rule. That keeps nfwf_fields independently deployable.
+    """
+    if user is None:
+        user = toolkit.g.user if hasattr(toolkit.g, 'user') else None
+    try:
+        from ckanext.nfwf_permissions import roles
+    except ImportError:
+        try:
+            toolkit.check_access('sysadmin', {'user': user})
+            return True
+        except toolkit.NotAuthorized:
+            return False
+    return roles.administers_grants(user)
+
+def grant_admin_not_empty(key, data, errors, context):
+    """Required for whoever administers grants, ignored for everyone else.
+
+    Must stay in step with the `can_admin_grant` template gate: the field this
+    guards is only rendered for the same audience, so requiring it of anyone
+    else would make the grant form unsavable with an error about a field they
+    were never shown.
+    """
+    if can_admin_grant(context.get('user')):
+        toolkit.get_validator('not_empty')(key, data, errors, context)
+    else:
+        toolkit.get_validator('ignore_missing')(key, data, errors, context)
+
 def required_for_new_resource(key, data, errors, context):
     # Require this resource field only for newly-added resources (which have no id yet)
     # Without this, any legacy siblings that are missing a field will cause the validation to fail
@@ -1623,7 +1662,7 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
             'description': [toolkit.get_validator('not_empty')],
             'grant_cycle': [toolkit.get_validator('not_empty'),
                             toolkit.get_converter('convert_to_extras')],
-            'funding_source': [sysadmin_not_empty,
+            'funding_source': [grant_admin_not_empty,
                                toolkit.get_converter('convert_to_extras')],
             'owner_group': [toolkit.get_converter('convert_to_extras'),
                               toolkit.get_validator('not_empty')],
@@ -1681,6 +1720,7 @@ class Nfwf_Org_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultOrganization
             'get_value_or_extra' : get_value_or_extra,
             'replace_keys' : replace_keys,
             'remove_grant_prefix' : remove_grant_prefix,
+            'nfwf_can_admin_grant' : can_admin_grant,
             }
 
     # IConfigurer

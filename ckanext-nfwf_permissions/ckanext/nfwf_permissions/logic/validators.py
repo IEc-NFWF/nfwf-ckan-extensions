@@ -8,7 +8,37 @@ from ckan.plugins import toolkit
 
 from ckanext.nfwf_permissions import roles
 
-__all__ = [u'nfwf_id_list', u'nfwf_status_list', u'nfwf_role']
+__all__ = [
+    u'nfwf_id_list',
+    u'nfwf_status_list',
+    u'nfwf_role',
+    u'platform_or_program_admin_not_empty',
+]
+
+
+def platform_or_program_admin_not_empty(key, data, errors, context):
+    """Required for whoever may administer grants, ignored for everyone else.
+
+    Replaces ``ckanext-nfwf_fields``' ``sysadmin_not_empty`` on the grant
+    schema, so a Program Administrator faces the same required fields as a
+    Platform Administrator now that they can edit grants at all.
+
+    The shape -- required for one audience, ``ignore_missing`` for the rest --
+    is not a nicety. The field it guards is only *rendered* for that same
+    audience, so making it unconditionally required would leave everyone else
+    unable to save a grant at all, with an error about a field their form never
+    showed them. The template gate and this validator have to agree on who,
+    which is why both go through ``roles.administers_grants``.
+
+    Note what this deliberately is *not*: an override of the ``sysadmin`` auth
+    function. That would be far too broad -- everything in CKAN gated on
+    ``sysadmin`` would open up at once, when all that is wanted is one required
+    field on one form.
+    """
+    if roles.administers_grants(context.get(u'user')):
+        toolkit.get_validator(u'not_empty')(key, data, errors, context)
+    else:
+        toolkit.get_validator(u'ignore_missing')(key, data, errors, context)
 
 
 def nfwf_id_list(value):

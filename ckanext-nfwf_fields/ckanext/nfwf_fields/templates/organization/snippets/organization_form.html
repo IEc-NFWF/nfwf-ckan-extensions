@@ -87,7 +87,7 @@
     </div>
     <br/>
 
-    {% if user_is_sysadmin %}
+    {% if h.nfwf_can_admin_grant() %}
       {% set existing_funding_source_array = h.get_value_or_extra(data, 'funding_source') %}
       {% set existing_funding_source = existing_funding_source_array[0] if existing_funding_source_array else ''  %}
       {{ form.input('funding_source', id='field-funding_source', label=_('Funding Source(s)'), value=existing_funding_source, error=errors.funding_source, is_required=true) }}
