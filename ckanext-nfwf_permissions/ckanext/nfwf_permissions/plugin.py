@@ -11,11 +11,9 @@ What this plugin now provides:
   grant belongs to a program the caller administers
 * ``IPermissionLabels`` in ``labels.py`` for program-wide visibility of private
   datasets
-
-Still to come:
-
-* chained membership actions rejecting the retired grant capacities
-* ``ckan nfwf-permissions migrate-roles`` for the role migration
+* chained membership actions rejecting the retired grant capacities and
+  enforcing one role per user
+* ``ckan nfwf-permissions migrate-roles``, the Q3 migration report
 
 This lives in its own extension rather than in ``ckanext-nfwf_fields`` because
 authorization is a separate concern from field and facet logic, and separate
@@ -30,12 +28,13 @@ from ckanext.nfwf_permissions.labels import NfwfPermissionLabels
 @toolkit.blanket.actions
 @toolkit.blanket.auth_functions
 @toolkit.blanket.validators
+@toolkit.blanket.cli
 class NfwfPermissionsPlugin(plugins.SingletonPlugin, NfwfPermissionLabels):
-    """Registers the actions, auth functions, validators and permission labels.
+    """Registers the actions, auth functions, validators, CLI and labels.
 
-    The blanket decorators pick the first three up automatically from
-    ``logic/action.py``, ``logic/auth.py`` and ``logic/validators.py``, using the
-    ``__all__`` declared in each.
+    The blanket decorators pick the first four up automatically from
+    ``logic/action.py``, ``logic/auth.py``, ``logic/validators.py`` and
+    ``cli.py``, using the ``__all__`` declared in each.
 
     ``IPermissionLabels`` is different: ``get_permission_labels`` returns the
     plugin *object itself* and calls the label methods on it, so the behaviour
