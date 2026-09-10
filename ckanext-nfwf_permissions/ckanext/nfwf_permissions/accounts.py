@@ -63,8 +63,8 @@ def set_status(context, user, status):
     bookkeeping runs. Both ``state`` and ``plugin_extras`` are sysadmin-only
     fields on the user schema (``ckan/logic/schema.py:478`` and
     ``logic/action/update.py:834-838``), which is fine because every caller here
-    is a Platform Administrator -- and is the reason the ``ckanext-oauth2``
-    ``user_update`` block had to be lifted first (item 9).
+    is a Platform Administrator -- and is the reason ``ckanext-oauth2``'s
+    blanket refusal of ``user_update`` had to be lifted first.
     """
     state, marker = roles.STATUS_STORAGE[status]
 
@@ -127,8 +127,8 @@ def programs():
     """Every active program, for the modal's checkbox list.
 
     Only programs. Production has three of them against roughly 570 grants, so
-    grants cannot be served this way -- Task 126 uses
-    ``organization_autocomplete`` for the Grant Editor case.
+    grants cannot be served this way -- the Manage Roles modal uses
+    ``organization_autocomplete`` for the Grant Editor case instead.
     """
     groups = model.Session.query(model.Group).filter(
         model.Group.is_organization.is_(False),
@@ -196,8 +196,9 @@ def search_users(q=None, statuses=None, role=None, program_id=None,
     membership rows and the sysadmin flag, the other from ``plugin_extras`` --
     so neither can be expressed as a SQL predicate without duplicating the
     resolution rules in a second place where they could drift. The cheap
-    filters run in SQL and the derived ones in Python. Production holds 244
-    accounts, so the difference is not measurable.
+    filters run in SQL and the derived ones in Python. The account table here
+    is small enough that the difference is not measurable; revisit this if it
+    ever grows by orders of magnitude.
     """
     statuses = statuses or roles.DEFAULT_VISIBLE_STATUSES
     wanted_states = {roles.STATUS_STORAGE[status][0] for status in statuses}

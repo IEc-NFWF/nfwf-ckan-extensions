@@ -6,9 +6,9 @@ Registered through ``toolkit.blanket.cli``, which imports this module and calls
 
 Dry run is the default and there is no way to write without saying so twice:
 ``--apply`` plus a confirmation. That is not caution for its own sake. The
-report exists because Q3 has decisions in it that Emily and Adrian have to sign
-off on -- 116 accounts hold assignments of both scopes and have to lose one
-side -- and applying anything before that conversation would pre-empt it.
+report exists to be signed off before anything is applied: a large number of
+accounts hold assignments of both scopes and have to lose one side, and that
+is a decision for the product owner, not for a migration rule.
 
 What ``--apply`` actually writes is small: retired grant capacities held by
 accounts that are already Platform Administrators, and nothing else. See

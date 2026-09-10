@@ -13,7 +13,7 @@ What this plugin now provides:
   datasets
 * chained membership actions rejecting the retired grant capacities and
   enforcing one role per user
-* ``ckan nfwf-permissions migrate-roles``, the Q3 migration report
+* ``ckan nfwf-permissions migrate-roles``, the role migration report
 
 This lives in its own extension rather than in ``ckanext-nfwf_fields`` because
 authorization is a separate concern from field and facet logic, and separate

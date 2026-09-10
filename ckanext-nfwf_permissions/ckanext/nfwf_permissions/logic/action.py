@@ -405,9 +405,9 @@ def _assert_grant_belongs_to_an_administered_program(context, data_dict):
     migration, ``ckan`` CLI commands -- would be refused.
 
     Platform Administrators are exempt outright. They own the whole site, and
-    the 30 grants that legitimately belong to no program at all could not exist
-    otherwise, since ``owner_group`` would have to name a program they
-    administer.
+    the grants that legitimately belong to no program at all could not exist
+    otherwise, since ``owner_group`` would have to name a program the creator
+    administers.
     """
     if context.get(u'ignore_auth'):
         return
@@ -467,11 +467,11 @@ def _reindex_if_program_changed(organization, before):
     above, so without clearing it the "after" value would be the stale "before"
     one and a real move would look like no change at all.
 
-    Doing it synchronously is a deliberate choice. The work is bounded by one
-    grant -- the largest holds 27 datasets and the average is four -- so it is
-    far cheaper than a background job that needs a worker process to exist,
-    which this deployment does not run. A bulk change of ``owner_group``, as the
-    role migration does, still needs a full ``ckan search-index rebuild``.
+    Doing it synchronously is a deliberate choice. The work is bounded by a
+    single grant's datasets, which is a small number here, so it is far cheaper
+    than a background job that needs a worker process to exist -- which this
+    deployment does not run. A bulk change of ``owner_group``, as the role
+    migration does, still needs a full ``ckan search-index rebuild``.
     """
     roles.clear_cache()
     if roles.program_id_for_grant(organization[u'id']) == before:
@@ -516,14 +516,15 @@ def _assert_membership_is_allowed(context, group_ref, user_ref, capacity):
     Two rules, both from the redesign:
 
     * **The retired grant capacities.** Grant `member` and grant `admin` are
-      gone; on a grant the only role is Grant Editor. Production still holds
-      585 grant-`admin` and 59 grant-`member` rows, which the migration reports
-      rather than converts -- but nothing new should be added.
+      gone; on a grant the only role is Grant Editor. Existing rows with those
+      capacities are left alone for the migration to report on rather than
+      being rewritten here -- but nothing new should be added.
     * **One role per user.** Settled 2026-08-19, and a conflict-of-interest
       control rather than a convenience: Program Reader is for outside
       contractors who are typically conflicted out of applying for grant funds,
       so it must not be combinable with a grant role. That makes it a
-      server-side rule, not something the UI can be trusted to hide.
+      server-side rule, not something the UI can be trusted to hide. Note the
+      existing data does not satisfy it; see the migration report.
     """
     if context.get(u'ignore_auth'):
         return

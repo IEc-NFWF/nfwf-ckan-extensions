@@ -1,5 +1,9 @@
 # encoding: utf-8
-"""Analyse existing role assignments against the new role model -- the Q3 report.
+"""Analyse existing role assignments against the new role model.
+
+Produces the migration report the role redesign was deferred on: what the new
+model makes of every assignment that already exists, and which ones a person
+has to decide about rather than a rule.
 
 Kept separate from ``cli.py`` so the analysis is testable without invoking a
 command, and so nothing here can write: every function below only reads.
@@ -96,7 +100,7 @@ def _disposition(sysadmin, is_organization, capacity):
 
 
 def plan():
-    """The whole Q3 report, as plain data.
+    """The whole migration report, as plain data.
 
     Returns a dict with ``assignments``, ``accounts``, ``orphan_grants`` and
     ``inactive_holders``, plus a ``totals`` summary.
@@ -202,8 +206,8 @@ def excluded_rows():
 
     Counted and reported rather than silently dropped, because otherwise these
     numbers will not reconcile with a plain ``select count(*) from member`` and
-    someone will lose an afternoon to the difference. Production has 13 of
-    them, 11 being grant-``admin`` rows held by the two service accounts.
+    someone will lose an afternoon to the difference. They are mostly retired
+    capacities held by the service accounts.
 
     They are excluded because they confer nothing -- the group is gone, so no
     role, no visibility, no edit rights -- and including them would inflate the
@@ -222,7 +226,7 @@ def orphan_grants():
     """Active grants with no program, which no program role can reach.
 
     Both spellings count: no ``owner_group`` row at all, and the key present
-    with an empty value. Production is entirely the second kind.
+    with an empty value -- in this data it is entirely the second kind.
     """
     grants = model.Session.query(model.Group.name, model.Group.title).filter(
         model.Group.is_organization.is_(True),

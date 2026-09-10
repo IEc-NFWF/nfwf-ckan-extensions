@@ -275,8 +275,9 @@ def _program_id_for_grant_id(grant_id):
     if not row:
         return None
     # "No program" has two spellings in the production data: no row at all,
-    # and the key present with an empty value. 30 of the 571 grants are the
-    # second kind, so ``or None`` here is load-bearing, not defensive.
+    # and the key present with an empty value. A substantial minority of grants
+    # are the second kind, so ``or None`` here is load-bearing, not defensive.
+    # `ckan nfwf-permissions migrate-roles` reports the current count.
     return row[0] or None
 
 
@@ -311,7 +312,8 @@ def grants_in_program(program):
     """Ids of every active grant whose ``owner_group`` is ``program``.
 
     A ``frozenset``, because the result is cached and shared between callers
-    and so must not be mutable. The largest program holds 487 grants.
+    and so must not be mutable -- and it can be large, since most of the site's
+    grants belong to a single program.
     """
     program_id = _group_id(program, False)
     if program_id is None:
@@ -427,11 +429,12 @@ def user_role(user):
     """The single role ``user`` holds, or ``None`` if they hold none.
 
     One role per user is the rule (settled 2026-08-19) and
-    ``nfwf_user_role_set`` enforces it on the way in, but the production data
-    predates the rule and holds combinations -- 583 of the 585 grant-``admin``
-    rows belong to accounts that are already sysadmins. So this resolves by
-    precedence in ``ROLES`` order, most privileged wins, and keeps giving a
-    deterministic answer until the migration has run.
+    ``nfwf_user_role_set`` enforces it on the way in, but the data predates the
+    rule and is full of combinations -- most grant-``admin`` rows belong to
+    accounts that are already sysadmins, and many accounts hold both a program
+    and a grant assignment. So this resolves by precedence in ``ROLES`` order,
+    most privileged wins, and keeps giving a deterministic answer until the
+    migration has run.
 
     The retired grant capacities confer no role: an account whose only
     assignment is grant-``member`` resolves to ``None``, which is exactly what

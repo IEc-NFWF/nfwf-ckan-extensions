@@ -7,8 +7,9 @@ Three layers answer every question, in this order.
 every action before an auth function is consulted (``ckan/authz.py:218-223``),
 so nothing here needs to mention them. The corollary is that none of these
 functions may be decorated with ``@toolkit.auth_sysadmins_check``, which
-*suppresses* that short-circuit -- precisely the bug in ``ckanext-oauth2`` that
-item 9 had to fix before promote/demote could work at all.
+*suppresses* that short-circuit. That decorator was why ``ckanext-oauth2``
+locked even sysadmins out of editing a user record, which had to be fixed
+before promoting a Platform Administrator could work at all.
 
 **2. Program Administrators are what these overrides exist for.** They hold no
 membership row on the grants they administer: a grant points at its program
@@ -48,7 +49,8 @@ answer -- each of these is a decision, not an oversight:
   exactly this policy (sysadmins allowed, everyone else refused). CKAN raises
   at startup if two plugins register the same non-chained auth function
   (``ckan/authz.py:100-110``), so registering it here would stop the site
-  booting.
+  booting. The same goes for ``user_create``, ``user_reset`` and
+  ``request_reset``, which that extension also claims.
 
 Rejecting a *retired* capacity is not done here. ``member_create`` speaks in
 ``capacity`` and ``organization_member_create`` in ``role``, so one check over
@@ -64,7 +66,7 @@ from ckan.plugins import toolkit
 from ckanext.nfwf_permissions import roles
 
 __all__ = [
-    # The Task 117/126 API contract.
+    # The user-management API contract.
     u'nfwf_user_list',
     u'nfwf_user_role_show',
     u'nfwf_user_role_set',
@@ -113,11 +115,11 @@ def _administers_a_program(context):
         _caller(context), [roles.CAPACITY_ADMIN]))
 
 
-# -- The Task 117/126 API contract -------------------------------------------
+# -- The user-management API contract ----------------------------------------
 #
 # Returning False unconditionally means "Platform Administrator only", by way
-# of the short-circuit described above. Task 117 also wants Program
-# Administrators to see the users within their own program; that is a
+# of the short-circuit described above. The user-management screen also wants
+# Program Administrators to see the users within their own program; that is a
 # *filtered* list, so it belongs inside ``nfwf_user_list`` where a filter can
 # be applied, not here where the only answers are all or nothing.
 
@@ -264,11 +266,11 @@ def member_create(context, data_dict):
     ``manage_group`` when the object is a dataset, and capacity ``member``
     carries ``manage_group`` (``ckan/authz.py:250-252``) -- so stock CKAN lets
     a Program Reader add and remove a program's datasets. That is not
-    theoretical: there are 247 active dataset-to-program member rows in the
-    data, and 119 accounts resolve to Program Reader. The role exists for
-    outside contractors who are conflicted out of applying for grant funds;
-    read-only is the entire point of it, so the program branch allows only its
-    own Program Administrator.
+    theoretical -- datasets really are members of program groups in this data,
+    and Program Reader is the most populous role on the site. The role exists
+    for outside contractors who are conflicted out of applying for grant
+    funds; read-only is the entire point of it, so the program branch allows
+    only its own Program Administrator.
     """
     group = core.get_group_object(context, data_dict)
     caller = _caller(context)
@@ -304,7 +306,7 @@ def user_list(context, data_dict=None):
 
     Stock CKAN lets *any* logged-in user list every account on the site --
     ``restrict_anon`` is the only gate once ``public_user_details`` is false.
-    That is Task 117's first item, and this one function closes it, because
+    Closing that off is what this one function does, because
     ``ckan/views/user.py`` gates the ``/user/`` page on exactly this check.
     ``user_autocomplete`` defers here too, so it is covered.
     """

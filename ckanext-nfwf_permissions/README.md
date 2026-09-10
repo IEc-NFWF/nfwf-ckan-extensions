@@ -2,16 +2,18 @@
 
 NFWF user roles, permissions and account approval — **Task 125**.
 
-> **Status: API contract only.** Every action below is live and callable, validates
-> its input for real, and enforces authorization for real. The bodies return
-> **fixture data** mirroring the US 0117 / US 0126 mockups instead of reading the
-> database. Responses carry `"stub": true` so it is obvious in the network tab.
->
-> Build against these signatures now — they are not going to change. The `stub`
-> key disappears when the real implementation lands; nothing should depend on it.
+> **Status: implemented against the database.** Every action below reads and
+> writes real data. The signatures, parameters and response shapes are unchanged
+> from the stub release they replaced, so anything built against those keeps
+> working — the only difference is that the `"stub": true` marker is gone.
 
-This exists so Tasks 117 (user management screen) and 126 (Manage Roles modal)
-are not blocked waiting on the Task 125 backend.
+This exists so the user management screen and the Manage Roles modal are not
+blocked waiting on the roles backend.
+
+**Not yet enabled anywhere.** Add `nfwf_permissions` to `CKAN__PLUGINS` before
+any of it takes effect; see [Development](#development). Turning it on activates
+the permission matrix for every user at once, so it is worth doing as its own
+deliberate step.
 
 ---
 
@@ -57,9 +59,12 @@ A Platform Administrator *is* a CKAN sysadmin — CKAN's authorization
 short-circuits on the `sysadmin` flag before this extension's auth functions run,
 so they get through automatically. Everyone else gets `NotAuthorized` (HTTP 403).
 
-Task 117 also asks for Program Administrators to see the users in their own
-program. That scoping is not implemented yet; it lands with the full permission
-matrix. Until then, assume Platform Administrator only.
+The user management screen also asks for Program Administrators to see the
+users within their own program. The permission matrix that would let them is in
+place, but this API is still **Platform Administrator only** — a program-scoped
+user list is a filtered result rather than an all-or-nothing permission, so it
+needs a filter argument and a decision about what a Program Administrator should
+see. Build against Platform Administrator only for now.
 
 ---
 
@@ -86,7 +91,22 @@ rejected if submitted.
 | `rejected` | Account request rejected | no — needs the "Include Rejected Accounts?" toggle |
 
 Terminology: a CKAN **organization** is a *Grant*; a CKAN **group** is a
-*Program*.
+*Program*. The code uses the NFWF words, so `roles.py` talks about grants and
+programs while the queries underneath address `group` rows.
+
+### Where the decisions live
+
+Comments in this extension refer to decisions rather than restating them —
+"settled 2026-08-19", "accepted deliberately". Those refer to the Task 125
+design document and the Teams thread it summarises, which are **not in this
+repository**. If you are reading a comment that leans on a decision you cannot
+find, ask Janusz Strzepek or Emily; the substance is meant to be stated inline,
+so a missing reference should never leave you unable to follow the reasoning. If
+it does, that is a bug in the comment.
+
+Counts are deliberately **not** quoted in comments — they go stale within days.
+`ckan nfwf-permissions migrate-roles` prints the current numbers for anything a
+comment describes qualitatively.
 
 ---
 
@@ -113,7 +133,6 @@ Lists accept either a real JSON array or a comma-separated string.
   "count": 6,
   "limit": 20,
   "offset": 0,
-  "stub": true,
   "results": [
     {
       "id": "fixture-user-reditor",
@@ -165,7 +184,6 @@ Everything the modal needs to render its controls.
 
 ```json
 {
-  "stub": true,
   "roles": [
     { "value": "platform_admin", "label": "Platform Administrator", "assigned_to": null },
     { "value": "program_admin",  "label": "Program Administrator",  "assigned_to": "program" },
@@ -212,7 +230,6 @@ rather than adding to it.
   "programs": [ { "id": "...", "name": "...", "title": "..." } ],
   "grants": [],
   "assignments_in_effect": true,
-  "stub": true
 }
 ```
 
@@ -246,20 +263,26 @@ actions that make sense for the row's status.
 
 ---
 
-## What the writes do while this is a stub
+## What the writes do
 
 `nfwf_user_role_set`, `nfwf_user_approve`, `nfwf_user_reject` and
-`nfwf_user_deactivate` authorize and validate for real, then **return the
-correct "after" state without persisting anything.** The fixture data is
-deep-copied per call, so a write cannot even leak into the next request in the
-same worker.
+`nfwf_user_deactivate` persist. A role change rewrites the user's membership
+rows, or the `sysadmin` flag for Platform Administrator; a status change writes
+`user.state` and, for the two "gone" statuses, a marker in `plugin_extras`.
+Responses are safe to swap straight into a table row, and a refresh now shows
+the same thing.
 
-For the UI that means: optimistic updates render correctly and the response is
-safe to swap into the table row, but **a refresh reverts everything.** Build and
-demo the flow against these; just don't write a test that asserts a change
-survives a reload.
+Two behaviours worth knowing:
 
-Error paths *are* real, so build against them:
+- **A role change replaces, it does not add.** A user holds one role, so setting
+  a program role clears any grant assignments and vice versa. Promoting someone
+  to Platform Administrator is the exception: their assignments are *retained*
+  and simply not consulted, so demoting them restores what they had. The
+  response says which case you are in via `assignments_in_effect`.
+- **A partial failure writes nothing.** One unknown id in `program_ids` fails
+  the whole call rather than saving the role with the ids it recognised.
+
+Error paths:
 
 | Request | Response |
 |---|---|
@@ -295,20 +318,48 @@ Error paths *are* real, so build against them:
    before the real implementation enforces anything; until then the API accepts
    any of them.
 
-## Still to come in Task 125
+## What else is in here
 
-Layered on top of this without any signature changing:
+Beyond the API above, all landed and all layered on without a signature
+changing:
 
-- `IPermissionLabels` — program-wide visibility of private datasets
-- the full permission matrix in `logic/auth.py`
-- chained membership actions rejecting the retired grant capacities
-- validator so Program Admins face the same required grant fields as Platform Admins
-- `ckan nfwf-permissions migrate-roles [--dry-run] [--report CSV]`
-- two fixes in `ckanext-oauth2`: allow sysadmins to edit user records, and create
-  new accounts as pending. **Approve, reject, deactivate and promote cannot work
-  against the real database until the first of those lands** — they all go
-  through `user_update`, which the login extension currently blocks for
-  everyone, sysadmins included.
+- `labels.py` — `IPermissionLabels`, giving program-wide visibility of private
+  datasets. Labels are written at **index time**, so a grant that changes
+  program needs its datasets reindexed; the chained `organization_update` does
+  that, and a bulk change needs `ckan search-index rebuild`.
+- `logic/auth.py` — the permission matrix. Read its module docstring before
+  changing anything there, especially the list of core functions deliberately
+  left to stock CKAN.
+- chained `organization_create` / `organization_update` — a grant must belong to
+  a program the caller administers, enforced on create *and* update so a grant
+  cannot be moved out from under its program.
+- chained `member_create` / `organization_member_create` / `group_member_create`
+  — reject the retired grant capacities and enforce one role per user. All three
+  honour `ignore_auth`, which is load-bearing: CKAN makes the creator of a new
+  organization an `admin` that way.
+- `platform_or_program_admin_not_empty`, so Program Administrators face the same
+  required grant fields as Platform Administrators. `ckanext-nfwf_fields`
+  consumes it through a soft import and falls back to sysadmin-only if this
+  extension is not installed.
+- `ckan nfwf-permissions migrate-roles [--report CSV] [--apply]` — the role
+  migration report. Dry run by default.
+
+### Still to come
+
+- Context-appropriate role labels on the member screens. `ckan/authz.py`'s
+  `roles_list()` is not context-aware, so `organization/member_new.html` and
+  `group/member_new.html` still offer CKAN's raw capacities. **Both are already
+  overridden by `ckanext-nfwf_theme`** — coordinate before touching them.
+- A program-scoped user list for Program Administrators (see
+  [Authorization](#authorization)).
+
+### Depends on `ckanext-oauth2`
+
+Approve, reject, deactivate and promote all go through `user_update`, which that
+extension used to refuse for everyone including sysadmins. That is fixed on its
+`task-125-oauth2-approval` branch, along with creating new accounts as `pending`
+so they can be approved at all. **These actions need that branch deployed to
+work.**
 
 ## Development
 
