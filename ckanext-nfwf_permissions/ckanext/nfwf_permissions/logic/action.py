@@ -76,6 +76,13 @@ def nfwf_user_list(context, data_dict):
     toolkit.check_access(u'nfwf_user_list', context, data_dict)
     data = _validated(data_dict, schema.nfwf_user_list_schema(), context)
 
+    # `natural_number_validator` accepts 0, and a limit of 0 would otherwise
+    # return an empty page alongside a non-zero `count` -- which reads as "no
+    # results" while the count says otherwise. Say so instead of guessing.
+    if data.get(u'limit') == 0:
+        raise toolkit.ValidationError({u'limit': [toolkit._(
+            u'Must be at least 1.')]})
+
     limit = min(data.get(u'limit', DEFAULT_LIMIT), MAX_LIMIT)
     offset = data.get(u'offset', 0)
 
@@ -184,7 +191,9 @@ def nfwf_user_role_set(context, data_dict):
     _check_assignment_scope(role, program_ids, grant_ids)
 
     user = _user_or_404(data[u'id'])
-    _assert_demotion_is_safe(context, user, role)
+    if role != roles.PLATFORM_ADMIN:
+        _assert_an_administrator_remains(
+            context, user, u'role', toolkit._(u'demote'))
     programs = _resolved(u'program_ids', program_ids, False)
     grants = _resolved(u'grant_ids', grant_ids, True)
 
@@ -251,6 +260,12 @@ def _set_status(context, data_dict, action_name, new_status):
     data = _validated(data_dict, schema.nfwf_user_id_schema(), context)
 
     user = _user_or_404(data[u'id'])
+    if new_status != roles.STATUS_ACTIVE:
+        # Every status but Active stops the account being used, so closing the
+        # last Platform Administrator's strands the site exactly as demoting
+        # them would.
+        _assert_an_administrator_remains(
+            context, user, u'id', toolkit._(u'close'))
     return accounts.user_record(
         accounts.set_status(context, user, new_status))
 
@@ -288,31 +303,34 @@ def _check_assignment_scope(role, program_ids, grant_ids):
         raise toolkit.ValidationError(errors)
 
 
-def _assert_demotion_is_safe(context, user, role):
-    """Refuse a demotion that nobody left on the site could undo.
+def _assert_an_administrator_remains(context, user, field, verb):
+    """Refuse anything that would leave the site with no Platform Administrator.
 
     Every action in this file is Platform-Administrator-only, so removing the
     last one leaves no account able to appoint another: recovery means
     ``ckan sysadmin add`` on the server, which needs a deploy key and somebody
     who knows that is the answer.
 
-    Self-demotion is refused for the same reason one step earlier. It is the
+    Self-removal is refused for the same reason one step earlier. It is the
     likelier accident of the two -- the screen is a table of other people's
     names, and the row for *you* looks exactly like the rest -- and a Platform
-    Administrator wanting to step down can be demoted by another one.
+    Administrator wanting to step down can be removed by another one.
 
-    Only a demotion is checked. Promoting anyone, or editing a Platform
-    Administrator who stays one, passes straight through.
+    Two routes reach this, and guarding only one would be pointless: a role
+    change away from Platform Administrator, and a status change that closes
+    the account. Deactivating the last two administrators locks the site just
+    as thoroughly as demoting them, and leaves ``remaining`` at zero besides,
+    since a deleted account does not count as one.
     """
-    if role == roles.PLATFORM_ADMIN or not user.sysadmin:
+    if not user.sysadmin:
         return
 
     caller = context.get(u'auth_user_obj') or model.User.get(
         context.get(u'user'))
     if caller is not None and caller.id == user.id:
-        raise toolkit.ValidationError({u'role': [toolkit._(
-            u'You cannot remove your own Platform Administrator role. Ask '
-            u'another Platform Administrator to do it.')]})
+        raise toolkit.ValidationError({field: [toolkit._(
+            u'You cannot {0} your own Platform Administrator account. Ask '
+            u'another Platform Administrator to do it.').format(verb)]})
 
     # Deleted accounts do not count: `legacy-admin` carries the flag in this data
     # and could not log in to use it.
@@ -321,9 +339,9 @@ def _assert_demotion_is_safe(context, user, role):
         model.User.state == u'active',
         model.User.id != user.id).count()
     if not remaining:
-        raise toolkit.ValidationError({u'role': [toolkit._(
+        raise toolkit.ValidationError({field: [toolkit._(
             u'{0} is the only Platform Administrator left. Appoint another '
-            u'one before changing this role.').format(user.name)]})
+            u'one before you {1} this account.').format(user.name, verb)]})
 
 
 def _user_or_404(id_or_name):
@@ -451,6 +469,16 @@ def _assert_grant_belongs_to_an_administered_program(context, data_dict):
     the grants that legitimately belong to no program at all could not exist
     otherwise, since ``owner_group`` would have to name a program the creator
     administers.
+
+    Raises ``ValidationError`` against ``owner_group`` rather than
+    ``NotAuthorized``, deliberately. This refuses a *submitted value*, which
+    makes it a field error, and the group edit view turns a ``NotAuthorized``
+    from the action into ``abort(404, 'Group not found')``
+    (``ckan/views/group.py:1093-1094``) -- so the caller was told their grant
+    did not exist and lost everything they had typed, while a
+    ``ValidationError`` re-renders the form with the message on the field.
+    The refusal is exactly as strong either way, and this matches how the
+    retired-capacity rule below already reports itself.
     """
     if context.get(u'ignore_auth'):
         return
@@ -467,8 +495,8 @@ def _assert_grant_belongs_to_an_administered_program(context, data_dict):
             user, [roles.CAPACITY_ADMIN]):
         return
 
-    raise toolkit.NotAuthorized(toolkit._(
-        u'A grant must belong to a program you administer.'))
+    raise toolkit.ValidationError({u'owner_group': [toolkit._(
+        u'A grant must belong to a program you administer.')]})
 
 
 @toolkit.chained_action

@@ -140,13 +140,19 @@ def plan():
             u'note': note,
         })
 
+    # Scanned once and passed down. `orphan_grants` asks
+    # `program_id_for_grant` per grant, and `roles`' request cache is a no-op
+    # on the CLI, so at roughly 570 grants each scan is over a thousand
+    # queries -- there is no reason to pay for it twice.
+    orphans = orphan_grants()
+
     return {
         u'assignments': assignments,
         u'accounts': accounts,
-        u'orphan_grants': orphan_grants(),
+        u'orphan_grants': orphans,
         u'inactive_holders': [a for a in accounts
                               if a[u'account_state'] != u'active'],
-        u'totals': _totals(assignments, accounts),
+        u'totals': _totals(assignments, accounts, orphans),
     }
 
 
@@ -238,7 +244,7 @@ def orphan_grants():
     return orphans
 
 
-def _totals(assignments, accounts):
+def _totals(assignments, accounts, orphans):
     def count(items, key, value):
         return len([item for item in items if item[key] == value])
 
@@ -252,7 +258,7 @@ def _totals(assignments, accounts):
         u'dual_scope_accounts': len(
             [a for a in accounts if a[u'dual_scope'] and
              not a[u'is_platform_admin']]),
-        u'orphan_grants': len(orphan_grants()),
+        u'orphan_grants': len(orphans),
         u'excluded_rows': excluded_rows(),
     }
 

@@ -272,7 +272,7 @@ class TestPlatformAdministratorsCannotAllBeRemoved(object):
                 id=last_admin.only[u'name'], role=roles.PROGRAM_ADMIN,
                 program_ids=[last_admin.program[u'id']])
 
-        assert u'your own Platform Administrator role' in str(caught.value)
+        assert u'your own Platform Administrator account' in str(caught.value)
 
     def test_another_one_may_be_demoted_while_someone_remains(self, world):
         """The guard must not make the role unusable in the normal case."""
@@ -310,3 +310,108 @@ class TestSearchEscapesLikeWildcards(object):
         factories.User(name=u'plain-name')
 
         assert accounts.search_users(q=u'%') == []
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestClosingAnAccountCannotStrandTheSite(object):
+    """The status actions reach the same lockout as a demotion.
+
+    Deactivating the last two Platform Administrators locks the site exactly
+    as demoting them would, and leaves nothing for the demotion guard's own
+    "remaining" count to find, since a deleted account is not an active one.
+    """
+
+    def test_the_last_administrator_cannot_be_deactivated(self, last_admin):
+        with pytest.raises(toolkit.ValidationError) as caught:
+            helpers.call_action(
+                u'nfwf_user_deactivate',
+                context={u'user': last_admin.ordinary[u'name']},
+                id=last_admin.only[u'id'])
+
+        assert u'only Platform Administrator' in str(caught.value)
+
+    def test_an_administrator_cannot_close_their_own_account(self, last_admin):
+        with pytest.raises(toolkit.ValidationError) as caught:
+            _as(last_admin.only[u'name'], u'nfwf_user_deactivate',
+                id=last_admin.only[u'name'])
+
+        assert u'your own Platform Administrator account' in str(caught.value)
+
+    def test_rejecting_is_guarded_too(self, last_admin):
+        with pytest.raises(toolkit.ValidationError):
+            helpers.call_action(
+                u'nfwf_user_reject',
+                context={u'user': last_admin.ordinary[u'name']},
+                id=last_admin.only[u'id'])
+
+    def test_an_ordinary_account_closes_normally(self, last_admin):
+        """The guard must not make the action unusable in the normal case."""
+        result = _as(last_admin.only[u'name'], u'nfwf_user_deactivate',
+                     id=last_admin.ordinary[u'id'])
+
+        assert result[u'status'] == roles.STATUS_DEACTIVATED
+
+    def test_approving_is_never_blocked(self, last_admin):
+        """Approve only ever restores access, so it needs no guard."""
+        result = _as(last_admin.only[u'name'], u'nfwf_user_approve',
+                     id=last_admin.only[u'name'])
+
+        assert result[u'status'] == roles.STATUS_ACTIVE
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestListFilteringByGroup(object):
+
+    def _list(self, world, **kwargs):
+        return _as(world.sysadmin[u'name'], u'nfwf_user_list', **kwargs)
+
+    def test_a_grant_may_be_named_rather_than_given_by_id(self, world):
+        """grant_id went into the query raw, so a name matched nothing."""
+        _assign(world.grant[u'id'], world.user[u'name'],
+                roles.CAPACITY_EDITOR)
+
+        by_id = self._list(world, grant_id=world.grant[u'id'])
+        by_name = self._list(world, grant_id=world.grant[u'name'])
+
+        # Counts rather than a fixed number: CKAN's site user is made an admin
+        # of every group the factories build, so it matches these filters too.
+        assert world.user[u'name'] in [r[u'name'] for r in by_id[u'results']]
+        assert by_name[u'count'] == by_id[u'count']
+        assert [r[u'name'] for r in by_name[u'results']] == \
+            [r[u'name'] for r in by_id[u'results']]
+
+    def test_both_filters_apply_rather_than_one_winning(self, world):
+        """Supplying both used to drop the grant and return the program."""
+        in_program_only = factories.User()
+        _assign(world.program[u'id'], in_program_only[u'name'],
+                roles.CAPACITY_MEMBER)
+        _assign(world.program[u'id'], world.user[u'name'],
+                roles.CAPACITY_MEMBER)
+        _assign(world.grant[u'id'], world.user[u'name'],
+                roles.CAPACITY_EDITOR)
+
+        both = self._list(world, program_id=world.program[u'id'],
+                          grant_id=world.grant[u'id'])
+        names = [row[u'name'] for row in both[u'results']]
+
+        # Holds both, so survives both filters.
+        assert world.user[u'name'] in names
+        # Holds the program only. Under the old behaviour the grant filter was
+        # dropped entirely and this user came back as well.
+        assert in_program_only[u'name'] not in names
+
+    def test_an_unknown_reference_matches_nothing(self, world):
+        assert self._list(world, grant_id=u'no-such-grant')[u'count'] == 0
+        assert self._list(world, program_id=u'no-such-program')[u'count'] == 0
+
+    def test_a_program_is_not_a_grant(self, world):
+        """Each reference has to name the right kind of group."""
+        assert self._list(world, grant_id=world.program[u'id'])[u'count'] == 0
+        assert self._list(world, program_id=world.grant[u'id'])[u'count'] == 0
+
+    def test_a_limit_of_zero_is_refused(self, world):
+        """Otherwise it returns no rows while count says there are some."""
+        with pytest.raises(toolkit.ValidationError) as caught:
+            self._list(world, limit=0)
+
+        assert u'limit' in str(caught.value)

@@ -3,8 +3,8 @@
 
 What this plugin now provides:
 
-* the ``nfwf_user_*`` API contract Tasks 117 and 126 build against -- still
-  stubbed bodies, real authorization and validation
+* the ``nfwf_user_*`` API Tasks 117 and 126 build against, reading and writing
+  the database -- the stub bodies and their ``"stub": true`` marker are gone
 * the permission matrix in ``logic/auth.py``, which is what lets a Program
   Administrator reach the grants in their program
 * chained ``organization_create`` / ``organization_update`` enforcing that a

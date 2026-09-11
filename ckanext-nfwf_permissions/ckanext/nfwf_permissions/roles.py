@@ -335,6 +335,17 @@ def program_id(program):
     return _group_id(program, False)
 
 
+def grant_id(grant):
+    """Resolve a grant reference -- an id or a name -- to an id, or ``None``.
+
+    The organization-side twin of ``program_id``, and it exists for the same
+    reason: a caller may send either kind of reference, while the membership
+    queries deal only in ids. Returns ``None`` for an unknown reference, a
+    deleted grant, and an id that names a program rather than a grant.
+    """
+    return _group_id(grant, True)
+
+
 # -- Memberships -------------------------------------------------------------
 
 def _capacity_rank(capacity):

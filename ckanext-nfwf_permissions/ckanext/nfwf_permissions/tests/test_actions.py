@@ -85,24 +85,24 @@ class TestGrantMustBelongToAnAdministeredProgram(object):
         assert result[u'name'] == u'grant-by-program-name'
 
     def test_program_admin_cannot_create_under_another_program(self, programs):
-        with pytest.raises(logic.NotAuthorized):
+        with pytest.raises(logic.ValidationError):
             _as(programs.program_admin[u'name'], u'organization_create',
                 name=u'grant-in-their-program',
                 owner_group=programs.program_theirs[u'id'])
 
     def test_program_admin_cannot_create_a_grant_with_no_program(self, programs):
-        with pytest.raises(logic.NotAuthorized):
+        with pytest.raises(logic.ValidationError):
             _as(programs.program_admin[u'name'], u'organization_create',
                 name=u'orphan-grant')
 
     def test_program_admin_cannot_create_with_an_empty_program(self, programs):
         """The 30-orphan spelling must not be a way round the check."""
-        with pytest.raises(logic.NotAuthorized):
+        with pytest.raises(logic.ValidationError):
             _as(programs.program_admin[u'name'], u'organization_create',
                 name=u'empty-owner-group', owner_group=u'')
 
     def test_program_admin_cannot_use_an_unknown_program(self, programs):
-        with pytest.raises(logic.NotAuthorized):
+        with pytest.raises(logic.ValidationError):
             _as(programs.program_admin[u'name'], u'organization_create',
                 name=u'bogus-program', owner_group=u'no-such-program')
 
@@ -110,7 +110,7 @@ class TestGrantMustBelongToAnAdministeredProgram(object):
         """owner_group must name a program, not another grant."""
         grant = factories.Organization()
 
-        with pytest.raises(logic.NotAuthorized):
+        with pytest.raises(logic.ValidationError):
             _as(programs.program_admin[u'name'], u'organization_create',
                 name=u'grant-under-a-grant', owner_group=grant[u'id'])
 
@@ -150,7 +150,7 @@ class TestGrantMustBelongToAnAdministeredProgram(object):
                     name=u'movable-grant',
                     owner_group=programs.program_mine[u'id'])
 
-        with pytest.raises(logic.NotAuthorized):
+        with pytest.raises(logic.ValidationError):
             _as(programs.program_admin[u'name'], u'organization_update',
                 id=grant[u'id'], name=grant[u'name'],
                 owner_group=programs.program_theirs[u'id'])
@@ -161,7 +161,7 @@ class TestGrantMustBelongToAnAdministeredProgram(object):
                     name=u'orphanable-grant',
                     owner_group=programs.program_mine[u'id'])
 
-        with pytest.raises(logic.NotAuthorized):
+        with pytest.raises(logic.ValidationError):
             _as(programs.program_admin[u'name'], u'organization_update',
                 id=grant[u'id'], name=grant[u'name'])
 
@@ -171,7 +171,7 @@ class TestGrantMustBelongToAnAdministeredProgram(object):
                     name=u'patchable-grant',
                     owner_group=programs.program_mine[u'id'])
 
-        with pytest.raises(logic.NotAuthorized):
+        with pytest.raises(logic.ValidationError):
             _as(programs.program_admin[u'name'], u'organization_patch',
                 id=grant[u'id'], owner_group=programs.program_theirs[u'id'])
 

@@ -234,13 +234,24 @@ def search_users(q=None, statuses=None, role=None, program_id=None,
             model.User.fullname.ilike(pattern, escape=u'\\'),
             model.User.email.ilike(pattern, escape=u'\\')))
 
-    if program_id or grant_id:
-        wanted = roles.program_id(program_id) if program_id else grant_id
+    # Both references are resolved, and both filters apply. Neither of those
+    # was true before: ``grant_id`` went into the query raw, so passing a
+    # grant *name* silently matched nothing and reported the grant as empty,
+    # and supplying both dropped the grant filter and returned the whole
+    # program. An unresolvable reference now means no matches outright rather
+    # than a ``group_id IS NULL`` comparison that quietly matches nothing.
+    for reference, resolve in ((program_id, roles.program_id),
+                               (grant_id, roles.grant_id)):
+        if not reference:
+            continue
+        resolved = resolve(reference)
+        if resolved is None:
+            return []
         query = query.filter(model.User.id.in_(
             model.Session.query(model.Member.table_id).filter(
                 model.Member.table_name == u'user',
                 model.Member.state == u'active',
-                model.Member.group_id == wanted)))
+                model.Member.group_id == resolved)))
 
     users = query.order_by(model.User.name).all()
 

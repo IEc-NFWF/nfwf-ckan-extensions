@@ -422,3 +422,55 @@ class TestRegistrationIsSafe(object):
 
     def test_every_registered_name_exists(self):
         assert [n for n in auth.__all__ if not hasattr(auth, n)] == []
+
+
+@pytest.mark.ckan_config(u'ckan.auth.create_unowned_dataset', u'false')
+@pytest.mark.usefixtures(u'clean_db', u'with_plugins')
+class TestPackageCreateOnTheFormPath(object):
+    """package_create is asked twice per dataset, and in two different shapes.
+
+    ``CreateView._prepare`` (ckan/views/dataset.py:516-527) asks it with no
+    data_dict at all and aborts 403 if the answer is no, long before the form
+    that would supply owner_org is rendered. Checking only the owner_org shape
+    left the override working for API callers and unreachable through the UI.
+
+    ``create_unowned_dataset`` is pinned because CKAN's ``test-core.ini``
+    sets it to *true* while this deployment's ``ckan.ini`` sets it to
+    ``false``. Left alone, stock's first check passes for any logged-in user
+    and every assertion below succeeds without exercising anything. Pin it and
+    the tests describe the site we actually run.
+    """
+
+    def test_program_admin_may_reach_the_add_dataset_form(self, world):
+        assert _can(world.program_admin[u'name'], u'package_create')
+
+    def test_and_still_may_create_in_their_own_program(self, world):
+        assert _can(world.program_admin[u'name'], u'package_create',
+                    owner_org=world.grant_a1[u'id'])
+
+    def test_the_general_answer_does_not_widen_the_specific_one(self, world):
+        """Reaching the form is not permission to file it anywhere."""
+        assert not _can(world.program_admin[u'name'], u'package_create',
+                        owner_org=world.grant_b1[u'id'])
+        assert not _can(world.program_admin[u'name'], u'package_create',
+                        owner_org=world.grant_orphan[u'id'])
+
+    def test_it_does_not_let_everyone_in(self, world):
+        """Stock still decides for anyone who administers no program.
+
+        A Grant Editor is not in this list on purpose: stock already lets them
+        reach the form, because ``has_user_permission_for_some_org`` finds
+        their ``editor`` row on a real organization. Asserting otherwise would
+        be asserting that this override took a permission away.
+        """
+        for user in (world.program_reader, world.nobody):
+            assert not _can(user[u'name'], u'package_create'), user[u'name']
+        assert not _can(None, u'package_create')
+
+    def test_a_grant_editor_reaches_the_form_through_stock(self, world):
+        assert _can(world.grant_editor[u'name'], u'package_create')
+
+    def test_a_grant_editor_is_unaffected(self, world):
+        """Stock already grants them this; the override must not shadow it."""
+        assert _can(world.grant_editor[u'name'], u'package_create',
+                    owner_org=world.grant_a1[u'id'])

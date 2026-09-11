@@ -171,11 +171,30 @@ def package_create(context, data_dict=None):
     Carries ``auth_allow_anonymous_access`` because the core function does.
     Dropping it would deny anonymous callers a step earlier with a different
     message; keeping it means stock still decides their case.
+
+    **This is asked in two shapes and both have to work.** The form path asks
+    it with no ``data_dict`` at all -- ``CreateView._prepare``
+    (``ckan/views/dataset.py:516-527``) calls ``check_access('package_create',
+    context)`` bare, and aborts 403 if it fails -- so there is no
+    ``owner_org`` yet to check a grant against. Answering only the second
+    shape meant a Program Administrator was refused before ever reaching the
+    form where they would have chosen the grant, which made the override
+    unreachable through the UI and left it working for API callers only.
+
+    So with no ``owner_org``, the question is the general one -- may this
+    caller create datasets anywhere? -- and administering any program answers
+    it. The per-grant check still happens on the way in, because the create
+    itself carries ``owner_org`` and comes back through here.
     """
+    caller = _caller(context)
     owner_org = (data_dict or {}).get(u'owner_org')
-    if owner_org and roles.is_program_admin_for_grant(
-            _caller(context), owner_org):
+
+    if owner_org:
+        if roles.is_program_admin_for_grant(caller, owner_org):
+            return _allowed()
+    elif _administers_a_program(context):
         return _allowed()
+
     return core_create.package_create(context, data_dict)
 
 
