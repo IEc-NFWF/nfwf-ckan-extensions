@@ -40,10 +40,10 @@ answer -- each of these is a decision, not an oversight:
   ``member`` does not, so stock already lets a Program Administrator add
   Program Readers to their own program and nobody else.
 * ``package_delete``, every ``resource_*``, ``member_delete``,
-  ``group_member_delete``, ``organization_member_delete`` and
-  ``user_autocomplete`` -- all of these defer through ``authz.is_authorized``
-  to ``package_update``, ``member_create`` or ``user_list``, so they inherit
-  the overrides here instead of needing their own.
+  ``group_member_delete`` and ``organization_member_delete`` -- all of these
+  defer through ``authz.is_authorized`` to ``package_update`` or
+  ``member_create``, so they inherit the overrides here instead of needing
+  their own.
 * ``user_delete`` -- already ``{'success': False}``, i.e. sysadmin-only.
 * ``user_update`` -- **owned by ``ckanext-oauth2``**, which already implements
   exactly this policy (sysadmins allowed, everyone else refused). CKAN raises
@@ -84,6 +84,7 @@ __all__ = [
     u'organization_member_create',
     u'dataset_purge',
     u'user_list',
+    u'user_autocomplete',
     u'user_show',
 ]
 
@@ -308,10 +309,43 @@ def user_list(context, data_dict=None):
     ``restrict_anon`` is the only gate once ``public_user_details`` is false.
     Closing that off is what this one function does, because
     ``ckan/views/user.py`` gates the ``/user/`` page on exactly this check.
-    ``user_autocomplete`` defers here too, so it is covered.
+
+    ``user_autocomplete`` used to be covered by this too, since stock defers to
+    it. That turned out to take the member screens down with it -- see below.
     """
     return _denied(toolkit._(
         u'Only a Platform Administrator may list user accounts.'))
+
+
+def user_autocomplete(context, data_dict=None):
+    """Platform Administrators, and Program Administrators.
+
+    Stock defers to ``user_list`` (``ckan/logic/auth/get.py:214-215``), which
+    the override above refuses outright -- and that took the *only* user picker
+    on both member screens with it. A Program Administrator may add Grant
+    Editors to the grants in their program and Program Readers to the program
+    itself, and each of those templates sources its lookup from
+    ``/api/2/util/user/autocomplete``, so without this they hold a permission
+    they can never exercise. To add someone you have to be able to find them,
+    and the people worth finding are the ones not already assigned, which is
+    why scoping the lookup to the caller's own program would not have helped.
+
+    Opening the lookup without opening the list is the point of splitting them.
+    ``user_list`` returns whole user records; this returns ``id``, ``name`` and
+    ``fullname`` only (``ckan/logic/action/get.py:1630``), matches on name and
+    full name -- email matching is already restricted to sysadmins in
+    ``model.User.search`` (``ckan/model/user.py:310-313``) -- and excludes
+    deleted accounts, so deactivated and rejected ones stay hidden.
+
+    Program Readers and Grant Editors get nothing here. Neither may add anyone
+    to anything, so neither has a reason to look a person up, and Program
+    Reader is the role the conflict-of-interest rules are written about.
+    """
+    if _administers_a_program(context):
+        return _allowed()
+    return _denied(toolkit._(
+        u'Only a Platform Administrator or a Program Administrator may look '
+        u'up user accounts.'))
 
 
 def user_show(context, data_dict=None):

@@ -66,6 +66,14 @@ user list is a filtered result rather than an all-or-nothing permission, so it
 needs a filter argument and a decision about what a Program Administrator should
 see. Build against Platform Administrator only for now.
 
+One core action is deliberately **not** Platform-Administrator-only:
+`user_autocomplete` is open to Program Administrators as well. They are allowed
+to add Grant Editors to the grants in their program and Program Readers to the
+program itself, and the member screens have no user picker but that one — so
+without it they would hold a permission they could never use. Core `user_list`
+stays closed, which is the distinction: they can look up a named person, not
+browse the whole directory. See `logic/auth.py`.
+
 ---
 
 ## Vocabulary

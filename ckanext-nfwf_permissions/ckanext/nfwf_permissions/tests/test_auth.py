@@ -331,11 +331,31 @@ class TestUserRecords(object):
                      world.grant_editor, world.nobody):
             assert not _can(user[u'name'], u'user_list'), user[u'name']
 
-    def test_user_autocomplete_is_locked_down_with_user_list(self, world):
-        """It defers to user_list, so Task 117 item 1 is closed on both paths."""
-        assert not _can(world.program_admin[u'name'], u'user_autocomplete',
-                        q=u'a')
+    def test_program_admins_may_look_a_user_up(self, world):
+        """Otherwise they hold a membership permission they cannot exercise.
+
+        Stock defers user_autocomplete to user_list, and denying both left a
+        Program Administrator authorized to add members with no way to find
+        anyone -- the member screens have no user picker but this one.
+        """
+        assert _can(world.program_admin[u'name'], u'user_autocomplete', q=u'a')
         assert _can(world.platform_admin[u'name'], u'user_autocomplete', q=u'a')
+
+    def test_lookup_is_open_but_the_list_is_not(self, world):
+        """The split is the whole point: find a named person, not browse all.
+
+        user_list returns whole user records; user_autocomplete returns id,
+        name and fullname, and never a deleted account.
+        """
+        assert not _can(world.program_admin[u'name'], u'user_list')
+        assert _can(world.program_admin[u'name'], u'user_autocomplete', q=u'a')
+
+    def test_roles_that_cannot_add_anyone_cannot_look_anyone_up(self, world):
+        """Neither may assign membership, so neither needs the lookup."""
+        for user in (world.program_reader, world.grant_editor, world.nobody):
+            assert not _can(user[u'name'], u'user_autocomplete',
+                            q=u'a'), user[u'name']
+        assert not _can(None, u'user_autocomplete', q=u'a')
 
     def test_a_user_may_view_their_own_account(self, world):
         assert _can(world.program_reader[u'name'], u'user_show',
@@ -371,6 +391,7 @@ class TestPlatformAdministrator(object):
                                 u'object_type': u'user'}),
             (u'organization_member_create', {u'id': world.grant_b1[u'id']}),
             (u'user_list', {}),
+            (u'user_autocomplete', {u'q': u'a'}),
             (u'user_show', {u'id': world.nobody[u'name']}),
         ]
         for action, data_dict in checks:
