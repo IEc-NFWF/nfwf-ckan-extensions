@@ -187,18 +187,39 @@ def role_record(user):
 
 # -- Searching ---------------------------------------------------------------
 
+def _escape_like(term):
+    """Escape LIKE wildcards in a user-supplied search term.
+
+    Without this a search for ``a_b`` also matches ``axb``, and a search
+    containing ``%`` matches almost everything.
+    """
+    for char in (u'\\', u'%', u'_'):
+        term = term.replace(char, u'\\' + char)
+    return term
+
+
 def search_users(q=None, statuses=None, role=None, program_id=None,
                  grant_id=None):
-    """Every account matching the filters, as records, newest name order.
+    """Every account matching the filters, as ``model.User`` rows, name order.
 
-    Returns the full match list; the action pages it. Doing so is deliberate:
-    ``role`` and the deactivated/rejected split are both *derived* -- one from
-    membership rows and the sysadmin flag, the other from ``plugin_extras`` --
-    so neither can be expressed as a SQL predicate without duplicating the
-    resolution rules in a second place where they could drift. The cheap
-    filters run in SQL and the derived ones in Python. The account table here
-    is small enough that the difference is not measurable; revisit this if it
-    ever grows by orders of magnitude.
+    Returns rows rather than records, and every match rather than one page,
+    for two different reasons.
+
+    *Every match*, because ``role`` and the deactivated/rejected split are both
+    *derived* -- one from membership rows and the sysadmin flag, the other from
+    ``plugin_extras`` -- so neither can be expressed as a SQL predicate without
+    duplicating the resolution rules somewhere they could drift from these. The
+    cheap filters run in SQL and the derived ones in Python, which means the
+    total is only known after the derived ones have run.
+
+    *Rows, not records*, because ``user_record`` costs two further queries per
+    user to name their programs and grants. The caller pages this list and
+    builds records for that page alone, so those queries are paid for the
+    twenty rows returned rather than for every account on the site.
+
+    The role filter is the one expensive derived filter -- it resolves
+    memberships per candidate -- so it only runs when a role was actually
+    asked for. Status is free: it reads the row already loaded.
     """
     statuses = statuses or roles.DEFAULT_VISIBLE_STATUSES
     wanted_states = {roles.STATUS_STORAGE[status][0] for status in statuses}
@@ -207,11 +228,11 @@ def search_users(q=None, statuses=None, role=None, program_id=None,
         model.User.state.in_(sorted(wanted_states)))
 
     if q:
-        pattern = u'%{0}%'.format(q.strip())
+        pattern = u'%{0}%'.format(_escape_like(q.strip()))
         query = query.filter(or_(
-            model.User.name.ilike(pattern),
-            model.User.fullname.ilike(pattern),
-            model.User.email.ilike(pattern)))
+            model.User.name.ilike(pattern, escape=u'\\'),
+            model.User.fullname.ilike(pattern, escape=u'\\'),
+            model.User.email.ilike(pattern, escape=u'\\')))
 
     if program_id or grant_id:
         wanted = roles.program_id(program_id) if program_id else grant_id
@@ -221,12 +242,9 @@ def search_users(q=None, statuses=None, role=None, program_id=None,
                 model.Member.state == u'active',
                 model.Member.group_id == wanted)))
 
-    records = [user_record(user) for user
-               in query.order_by(model.User.name).all()]
+    users = query.order_by(model.User.name).all()
 
-    # Derived filters, applied after the record is built so there is exactly
-    # one implementation of each rule.
-    records = [record for record in records if record[u'status'] in statuses]
+    users = [user for user in users if status_of(user) in statuses]
     if role:
-        records = [record for record in records if record[u'role'] == role]
-    return records
+        users = [user for user in users if roles.user_role(user) == role]
+    return users

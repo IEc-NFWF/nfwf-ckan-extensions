@@ -9,10 +9,12 @@ required-but-hidden, the grant form becomes unsavable with an error about a
 field the user was never shown -- so the shared answer comes from
 ``roles.administers_grants``.
 
-The consuming half lives in ``ckanext-nfwf_fields`` (its ``can_admin_grant``
-helper and ``grant_admin_not_empty``), which is a separate extension and not
-loaded by this suite. What is tested here is the rule; that the other extension
-resolves it is verified against the running site instead.
+The consuming half lives in ``ckanext-nfwf_fields``: ``grant_admin_not_empty``
+imports the validator below, and the ``can_admin_grant`` helper answers the
+same question for the template. Both bottom out in ``roles.administers_grants``
+so there is one rule, not two that can drift. That extension is not loaded by
+this suite, so what is tested here is the rule and the import path it depends
+on; that the form actually renders is verified against the running site.
 """
 import pytest
 
@@ -126,7 +128,20 @@ class TestRequiredFieldValidator(object):
         _data, errors = self._validate(None)
         assert errors == {}
 
-    def test_the_validator_is_registered_by_name(self, world):
-        """nfwf_fields resolves it by name, so the registration has to exist."""
+    def test_the_validator_is_importable_under_its_own_name(self, world):
+        """nfwf_fields imports it, so this path is a published interface.
+
+        Imported rather than resolved with get_validator, because nfwf_fields
+        has to keep working while this extension is installed but not enabled
+        -- which is how it sits right now. Renaming or moving this function
+        breaks the grant form in the other extension, silently, by sending it
+        down its sysadmin-only fallback.
+        """
+        from ckanext.nfwf_permissions.logic.validators import (
+            platform_or_program_admin_not_empty)
+        assert callable(platform_or_program_admin_not_empty)
+
+    def test_it_is_also_registered_by_name(self, world):
+        """Still registered, so a form schema can name it in config later."""
         assert toolkit.get_validator(
             u'platform_or_program_admin_not_empty') is not None

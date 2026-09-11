@@ -151,10 +151,19 @@ def _apply(plan_data, assume_yes):
         return
 
     removed = 0
+    skipped = 0
     for row in droppable:
         user = model.User.get(row[u'account'])
         group = model.Group.get(row[u'group_name'])
         if user is None or group is None:
+            continue
+        # Re-read the flag the disposition rests on. `plan()` ran before the
+        # confirmation prompt, which a person can sit on for as long as they
+        # like, and "there is nothing to restore it to" holds only while the
+        # account is still a Platform Administrator. If it was demoted in the
+        # meantime the row is a decision again, not a drop.
+        if not user.sysadmin:
+            skipped += 1
             continue
         member = model.Session.query(model.Member).filter(
             model.Member.table_name == u'user',
@@ -170,6 +179,10 @@ def _apply(plan_data, assume_yes):
     model.repo.commit()
     click.echo(u'')
     click.echo(u'Removed {0} row(s).'.format(removed))
+    if skipped:
+        click.echo(u'Skipped {0} row(s): the account is no longer a Platform '
+                   u'Administrator, so those rows need a decision again. '
+                   u'Re-run the report.'.format(skipped))
     click.echo(u'No search reindex is needed: these rows only affected which '
                u'datasets those accounts could see, and dataset permission '
                u'labels are unchanged. A bulk owner_group change would be '

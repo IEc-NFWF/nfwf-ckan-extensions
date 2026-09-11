@@ -81,7 +81,7 @@ def nfwf_user_list(context, data_dict):
 
     # Paged here rather than in SQL: `role` and the deactivated/rejected split
     # are derived rather than stored, so `accounts.search_users` resolves them
-    # in Python and returns every match. See its docstring for why.
+    # in Python and returns every matching row. See its docstring for why.
     matches = accounts.search_users(
         q=data.get(u'q'),
         statuses=data.get(u'statuses'),
@@ -89,11 +89,15 @@ def nfwf_user_list(context, data_dict):
         program_id=data.get(u'program_id'),
         grant_id=data.get(u'grant_id'))
 
+    # Slice first, then build. A record costs two queries to name the user's
+    # programs and grants, so building them before paging would charge every
+    # account on the site for a page that shows twenty.
     return {
         u'count': len(matches),
         u'limit': limit,
         u'offset': offset,
-        u'results': matches[offset:offset + limit],
+        u'results': [accounts.user_record(user)
+                     for user in matches[offset:offset + limit]],
     }
 
 
@@ -180,6 +184,7 @@ def nfwf_user_role_set(context, data_dict):
     _check_assignment_scope(role, program_ids, grant_ids)
 
     user = _user_or_404(data[u'id'])
+    _assert_demotion_is_safe(context, user, role)
     programs = _resolved(u'program_ids', program_ids, False)
     grants = _resolved(u'grant_ids', grant_ids, True)
 
@@ -281,6 +286,44 @@ def _check_assignment_scope(role, program_ids, grant_ids):
 
     if errors:
         raise toolkit.ValidationError(errors)
+
+
+def _assert_demotion_is_safe(context, user, role):
+    """Refuse a demotion that nobody left on the site could undo.
+
+    Every action in this file is Platform-Administrator-only, so removing the
+    last one leaves no account able to appoint another: recovery means
+    ``ckan sysadmin add`` on the server, which needs a deploy key and somebody
+    who knows that is the answer.
+
+    Self-demotion is refused for the same reason one step earlier. It is the
+    likelier accident of the two -- the screen is a table of other people's
+    names, and the row for *you* looks exactly like the rest -- and a Platform
+    Administrator wanting to step down can be demoted by another one.
+
+    Only a demotion is checked. Promoting anyone, or editing a Platform
+    Administrator who stays one, passes straight through.
+    """
+    if role == roles.PLATFORM_ADMIN or not user.sysadmin:
+        return
+
+    caller = context.get(u'auth_user_obj') or model.User.get(
+        context.get(u'user'))
+    if caller is not None and caller.id == user.id:
+        raise toolkit.ValidationError({u'role': [toolkit._(
+            u'You cannot remove your own Platform Administrator role. Ask '
+            u'another Platform Administrator to do it.')]})
+
+    # Deleted accounts do not count: `legacy-admin` carries the flag in this data
+    # and could not log in to use it.
+    remaining = model.Session.query(model.User).filter(
+        model.User.sysadmin.is_(True),
+        model.User.state == u'active',
+        model.User.id != user.id).count()
+    if not remaining:
+        raise toolkit.ValidationError({u'role': [toolkit._(
+            u'{0} is the only Platform Administrator left. Appoint another '
+            u'one before changing this role.').format(user.name)]})
 
 
 def _user_or_404(id_or_name):

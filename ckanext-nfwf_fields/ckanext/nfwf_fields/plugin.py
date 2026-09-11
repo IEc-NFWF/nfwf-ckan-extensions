@@ -482,7 +482,13 @@ def can_admin_grant(user=None):
     sysadmin-only rule. That keeps nfwf_fields independently deployable.
     """
     if user is None:
-        user = toolkit.g.user if hasattr(toolkit.g, 'user') else None
+        try:
+            user = toolkit.g.user
+        except (AttributeError, RuntimeError):
+            # RuntimeError, not AttributeError, is what Flask's `g` raises
+            # outside an application context -- a CLI command, a background
+            # job -- and hasattr() only swallows the latter.
+            user = None
     try:
         from ckanext.nfwf_permissions import roles
     except ImportError:
@@ -496,15 +502,25 @@ def can_admin_grant(user=None):
 def grant_admin_not_empty(key, data, errors, context):
     """Required for whoever administers grants, ignored for everyone else.
 
-    Must stay in step with the `can_admin_grant` template gate: the field this
-    guards is only rendered for the same audience, so requiring it of anyone
-    else would make the grant form unsavable with an error about a field they
-    were never shown.
+    Delegates to ckanext-nfwf_permissions rather than repeating the rule. It is
+    imported rather than resolved with get_validator because that extension is
+    not necessarily *enabled* -- its roles module is plain database access with
+    no plugin behind it -- and a name lookup would need the plugin registered.
+    If the package is absent entirely this falls back to the sysadmin-only rule
+    it replaced, which keeps nfwf_fields independently deployable.
+
+    Whatever answers it, the answer has to match the `can_admin_grant` template
+    gate: the field this guards is only rendered for that same audience, so
+    requiring it of anyone else would make the grant form unsavable with an
+    error about a field they were never shown. Both sides bottom out in
+    roles.administers_grants.
     """
-    if can_admin_grant(context.get('user')):
-        toolkit.get_validator('not_empty')(key, data, errors, context)
-    else:
-        toolkit.get_validator('ignore_missing')(key, data, errors, context)
+    try:
+        from ckanext.nfwf_permissions.logic.validators import (
+            platform_or_program_admin_not_empty)
+    except ImportError:
+        return sysadmin_not_empty(key, data, errors, context)
+    return platform_or_program_admin_not_empty(key, data, errors, context)
 
 def required_for_new_resource(key, data, errors, context):
     # Require this resource field only for newly-added resources (which have no id yet)

@@ -216,3 +216,97 @@ class TestOneRolePerUser(object):
 
         assert roles.programs_for_user(world.user[u'name'])
         assert roles.grants_for_user(world.user[u'name'])
+
+
+class LastAdmin(object):
+    """Exactly one active Platform Administrator, whatever else exists."""
+
+    def __init__(self):
+        self.only = factories.Sysadmin()
+        self.ordinary = factories.User()
+        self.program = factories.Group()
+        # CKAN's own site user carries the flag, so make "the last one" true
+        # rather than assume the factory produced the only one.
+        others = model.Session.query(model.User).filter(
+            model.User.sysadmin.is_(True),
+            model.User.state == u'active',
+            model.User.id != self.only[u'id']).all()
+        for user in others:
+            user.sysadmin = False
+        model.repo.commit()
+
+
+@pytest.fixture
+def last_admin(clean_db):
+    return LastAdmin()
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestPlatformAdministratorsCannotAllBeRemoved(object):
+    """Every action in logic/action.py is Platform-Administrator-only.
+
+    So removing the last one is not a recoverable mistake from inside the
+    product: it takes ``ckan sysadmin add`` on the server to undo.
+    """
+
+    def test_the_last_one_cannot_be_demoted(self, last_admin):
+        """Defence in depth -- reachable through an internal context.
+
+        A caller who is not themselves a Platform Administrator cannot get
+        here through the auth function; this guards the case where something
+        bypasses it, which the chained membership guards also have to allow.
+        """
+        with pytest.raises(toolkit.ValidationError) as caught:
+            helpers.call_action(
+                u'nfwf_user_role_set',
+                context={u'user': last_admin.ordinary[u'name']},
+                id=last_admin.only[u'id'], role=roles.PROGRAM_ADMIN,
+                program_ids=[last_admin.program[u'id']])
+
+        assert u'only Platform Administrator' in str(caught.value)
+
+    def test_a_platform_admin_cannot_demote_themselves(self, last_admin):
+        """The likelier accident: their own row looks like everyone else's."""
+        with pytest.raises(toolkit.ValidationError) as caught:
+            _as(last_admin.only[u'name'], u'nfwf_user_role_set',
+                id=last_admin.only[u'name'], role=roles.PROGRAM_ADMIN,
+                program_ids=[last_admin.program[u'id']])
+
+        assert u'your own Platform Administrator role' in str(caught.value)
+
+    def test_another_one_may_be_demoted_while_someone_remains(self, world):
+        """The guard must not make the role unusable in the normal case."""
+        spare = factories.Sysadmin()
+
+        result = _as(world.sysadmin[u'name'], u'nfwf_user_role_set',
+                     id=spare[u'id'], role=roles.PROGRAM_ADMIN,
+                     program_ids=[world.program[u'id']])
+
+        assert result[u'role'] == roles.PROGRAM_ADMIN
+
+    def test_promotion_is_never_blocked(self, last_admin):
+        result = helpers.call_action(
+            u'nfwf_user_role_set',
+            context={u'user': last_admin.only[u'name']},
+            id=last_admin.ordinary[u'id'], role=roles.PLATFORM_ADMIN)
+
+        assert result[u'role'] == roles.PLATFORM_ADMIN
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestSearchEscapesLikeWildcards(object):
+    """An underscore in a search term is a literal, not "any character"."""
+
+    def test_underscore_does_not_match_any_character(self, world):
+        factories.User(name=u'a_b', fullname=u'Literal Underscore')
+        factories.User(name=u'axb', fullname=u'Wildcard Match')
+
+        found = {user.name for user in accounts.search_users(q=u'a_b')}
+
+        assert u'a_b' in found
+        assert u'axb' not in found
+
+    def test_percent_does_not_match_everything(self, world):
+        factories.User(name=u'plain-name')
+
+        assert accounts.search_users(q=u'%') == []
