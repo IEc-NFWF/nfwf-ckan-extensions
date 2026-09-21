@@ -16,9 +16,26 @@ Solr on its own. The chained ``organization_update`` action reindexes that
 grant's datasets, and the role migration needs a full
 ``ckan search-index rebuild``.
 
-**Sysadmins never get here.** ``package_search`` sets ``labels = None`` for a
-sysadmin and for ``ignore_auth`` (``ckan/logic/action/get.py:1519-1524``), so
-Platform Administrators see everything without holding any label.
+**Sysadmins bypass the *user* side, by two different routes -- and not the
+dataset side at all.** ``package_search`` sets ``labels = None`` for a sysadmin
+and for ``ignore_auth`` (``ckan/logic/action/get.py:1906-1911``), so Platform
+Administrators see everything without holding any label. ``package_show``'s
+auth function has no such branch: it intersects the two sets unconditionally
+(``ckan/logic/auth/get.py:105-118``), and sysadmins are safe there only
+because ``authz.is_authorized`` returns before ever calling it. Worth knowing
+if anything here is ever chained or decorated with
+``@auth_sysadmins_check``, which would suppress that short-circuit and start
+subjecting Platform Administrators to label intersection.
+
+``get_dataset_labels`` is a different matter again: it runs at index time for
+*every* dataset regardless of who triggered the write, so it must never be
+short-circuited for a sysadmin -- a dataset a Platform Administrator saves
+would otherwise be indexed with no program labels, and quietly vanish from the
+searches this module exists to serve.
+
+(The citation above used to point at ``get.py:1519-1524``, which is the same
+four-line idiom inside ``package_autocomplete`` -- a different action. CKAN
+2.11 contains it twice, so the wrong one verifies just as convincingly.)
 
 **Only one plugin can provide labels.** ``get_permission_labels`` returns the
 *first* ``IPermissionLabels`` implementation it finds

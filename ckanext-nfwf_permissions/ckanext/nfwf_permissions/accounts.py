@@ -60,11 +60,27 @@ def set_status(context, user, status):
     """Move ``user`` to ``status``, writing both halves of its storage.
 
     Goes through ``user_patch`` rather than the model directly so CKAN's own
-    bookkeeping runs. Both ``state`` and ``plugin_extras`` are sysadmin-only
-    fields on the user schema (``ckan/logic/schema.py:478`` and
-    ``logic/action/update.py:834-838``), which is fine because every caller here
-    is a Platform Administrator -- and is the reason ``ckanext-oauth2``'s
-    blanket refusal of ``user_update`` had to be lifted first.
+    bookkeeping runs. ``state`` (``ckan/logic/schema.py:478``) and
+    ``plugin_extras`` (``:481``) both carry ``ignore_not_sysadmin``, as does
+    ``sysadmin`` itself (``:474``), which ``_set_sysadmin`` writes through this
+    same helper.
+
+    That validator is **not** a refusal. It returns early for a sysadmin or
+    for ``ignore_auth`` and otherwise does ``data.pop(key)``
+    (``ckan/logic/validators.py:588-597``), so a caller who is neither gets
+    the field silently dropped: ``user_update`` commits, returns 200, and the
+    record this module then re-reads still shows the old value -- a write that
+    reports success and did nothing. Every caller here is a Platform
+    Administrator, so that path is not currently reachable, but it is a quiet
+    failure rather than a loud one if a future caller is not.
+
+    (An earlier version of this note also cited
+    ``logic/action/update.py:834-838`` as a gate. It is not one: that block
+    runs *after* ``model.repo.commit()`` and only decides whether the response
+    echoes ``plugin_extras`` back.)
+
+    Lifting ``ckanext-oauth2``'s blanket refusal of ``user_update`` was still
+    the prerequisite for any of this working.
     """
     state, marker = roles.STATUS_STORAGE[status]
 

@@ -410,11 +410,17 @@ class TestRegistrationIsSafe(object):
         assert suppressing == []
 
     def test_the_oauth2_owned_functions_are_not_registered(self):
-        """CKAN raises at startup if two plugins claim the same auth function.
+        """CKAN refuses a duplicate non-chained auth function.
 
         ``ckanext-oauth2`` registers these four, so claiming any of them here
-        would stop the site booting -- with both plugins enabled, which is
+        would break authorization with both plugins enabled -- which is
         exactly how it runs.
+
+        This guard matters more than it looks, because the failure is not at
+        boot: the registry is assembled lazily (``ckan/authz.py:46-56``), so a
+        collision surfaces on the first request that checks anything, not on
+        startup. A clean start is no evidence that a new registration is safe,
+        which leaves this test as the thing that would actually catch it.
         """
         owned_by_oauth2 = {
             u'user_create', u'user_update', u'user_reset', u'request_reset'}

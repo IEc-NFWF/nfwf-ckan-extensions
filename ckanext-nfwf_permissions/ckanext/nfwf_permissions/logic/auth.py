@@ -46,11 +46,27 @@ answer -- each of these is a decision, not an oversight:
   their own.
 * ``user_delete`` -- already ``{'success': False}``, i.e. sysadmin-only.
 * ``user_update`` -- **owned by ``ckanext-oauth2``**, which already implements
-  exactly this policy (sysadmins allowed, everyone else refused). CKAN raises
-  at startup if two plugins register the same non-chained auth function
-  (``ckan/authz.py:100-110``), so registering it here would stop the site
-  booting. The same goes for ``user_create``, ``user_reset`` and
-  ``request_reset``, which that extension also claims.
+  exactly this policy: sysadmins allowed, everyone else refused
+  (``ckanext-oauth2/ckanext/oauth2/plugin.py:48-65``). CKAN refuses a duplicate
+  non-chained auth function (``ckan/authz.py:99-112``), so registering it here
+  too would break authorization.
+
+  ``user_create``, ``user_reset`` and ``request_reset`` are also claimed by
+  that extension and so must also be left alone -- but only for the
+  registration conflict, *not* because they share the policy. Those three
+  refuse everyone, Platform Administrators included, each being an
+  unconditional ``_no_permissions`` under ``@auth_sysadmins_check``. If a
+  Platform Administrator ever reports being unable to drive a password reset,
+  that is why, and it is oauth2's decision to revisit rather than something to
+  look for here.
+
+  Note the failure is not at boot, despite how it is often described: the
+  registry is built lazily behind ``if not self._functions``
+  (``ckan/authz.py:46-56``), so nothing assembles it until the first
+  authorization check. A collision therefore surfaces on the first request
+  that checks anything, not on startup -- which is a good deal harder to
+  attribute, so do not rely on a clean boot as evidence that a new
+  registration is safe.
 
 Rejecting a *retired* capacity is not done here. ``member_create`` speaks in
 ``capacity`` and ``organization_member_create`` in ``role``, so one check over
