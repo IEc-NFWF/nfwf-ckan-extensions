@@ -10,7 +10,7 @@ import pytest
 
 import ckan.tests.factories as factories
 import ckan.tests.helpers as helpers
-from ckan import model
+from ckan import authz, model
 from ckan.plugins import toolkit
 
 from ckanext.nfwf_permissions import accounts, roles
@@ -415,3 +415,112 @@ class TestListFilteringByGroup(object):
             self._list(world, limit=0)
 
         assert u'limit' in str(caught.value)
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestGroupToGroupMembershipIsRefused(object):
+    """The role model has no concept of a CKAN group hierarchy.
+
+    A grant points at its program through the ``owner_group`` extra precisely
+    *because* it is not a hierarchy -- that is why ``logic/auth.py`` needs its
+    Program Administrator overrides at all. A ``Member`` row with
+    ``table_name='group'`` reintroduces CKAN's native cascading underneath the
+    model, and nothing here audits it: ``migration.py`` filters on
+    ``table_name == 'user'`` throughout.
+
+    Demonstrated before the guard existed: a Program Administrator wrote
+    ``member_create(id=<a grant in their program>, object=<another grant>,
+    object_type='group')`` -- ``member_create``'s auth checks only ``id``,
+    never ``object``, so the parent could even be a grant from another
+    program -- and a holder of the retired grant ``admin`` capacity on that
+    parent, an account ``user_role`` reports as holding *no role*, gained full
+    ``update`` authority over the child grant.
+
+    Note ``world.grant`` is deliberately not used here: it has an empty
+    ``owner_group``, so auth would refuse a Program Administrator on it before
+    this guard was ever reached.
+    """
+
+    def _in_program(self, world):
+        return factories.Organization(extras=[
+            {u'key': roles.OWNER_GROUP_EXTRA, u'value': world.program[u'id']}])
+
+    def _program_admin(self, world):
+        user = factories.User()
+        _assign(world.program[u'id'], user[u'name'], roles.CAPACITY_ADMIN)
+        return user
+
+    def test_a_program_administrator_may_not_write_one(self, world):
+        child, parent = self._in_program(world), self._in_program(world)
+        padmin = self._program_admin(world)
+
+        with pytest.raises(toolkit.ValidationError) as caught:
+            _as(padmin[u'name'], u'member_create',
+                id=child[u'id'], object=parent[u'id'],
+                object_type=u'group', capacity=u'parent')
+
+        assert u'group membership' in str(caught.value)
+
+    def test_the_cascade_it_would_have_opened_stays_shut(self, world):
+        """The consequence, stated as the thing that must not happen."""
+        child, parent = self._in_program(world), self._in_program(world)
+        padmin = self._program_admin(world)
+        stale = factories.User()
+        _assign(parent[u'id'], stale[u'name'], roles.CAPACITY_ADMIN)
+
+        with pytest.raises(toolkit.ValidationError):
+            _as(padmin[u'name'], u'member_create',
+                id=child[u'id'], object=parent[u'id'],
+                object_type=u'group', capacity=u'parent')
+        roles.clear_cache()
+
+        assert roles.user_role(stale[u'name']) is None
+        assert not authz.has_user_permission_for_group_or_org(
+            child[u'id'], stale[u'name'], u'update')
+
+    def test_a_parent_from_another_program_is_refused_too(self, world):
+        """auth never inspects ``object``, so the guard has to."""
+        child = self._in_program(world)
+        foreign = factories.Organization(extras=[
+            {u'key': roles.OWNER_GROUP_EXTRA,
+             u'value': factories.Group()[u'id']}])
+        padmin = self._program_admin(world)
+
+        with pytest.raises(toolkit.ValidationError):
+            _as(padmin[u'name'], u'member_create',
+                id=child[u'id'], object=foreign[u'id'],
+                object_type=u'group', capacity=u'parent')
+
+    def test_user_rows_are_unaffected(self, world):
+        """The guard must not catch the membership writes that are the point."""
+        child = self._in_program(world)
+        padmin = self._program_admin(world)
+        editor = factories.User()
+
+        _as(padmin[u'name'], u'member_create',
+            id=child[u'id'], object=editor[u'name'],
+            object_type=u'user', capacity=roles.CAPACITY_EDITOR)
+
+        assert roles.user_role(editor[u'name']) == roles.GRANT_EDITOR
+
+    def test_a_platform_administrator_is_exempt(self, world):
+        """Deliberate: stock CKAN's hierarchy feature stays theirs to use.
+
+        Creating one really does open the cascade -- that is why it is refused
+        for everyone else -- so this is a capability reserved to the role that
+        already holds every other one.
+        """
+        child, parent = self._in_program(world), self._in_program(world)
+
+        _as(world.sysadmin[u'name'], u'member_create',
+            id=child[u'id'], object=parent[u'id'],
+            object_type=u'group', capacity=u'parent')
+
+    def test_internal_callers_are_exempt(self, world):
+        """ignore_auth, matching the other chained guards in this file."""
+        child, parent = self._in_program(world), self._in_program(world)
+
+        helpers.call_action(
+            u'member_create', context={u'user': world.user[u'name']},
+            id=child[u'id'], object=parent[u'id'],
+            object_type=u'group', capacity=u'parent')

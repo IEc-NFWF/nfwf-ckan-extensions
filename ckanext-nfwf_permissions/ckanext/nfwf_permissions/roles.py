@@ -267,17 +267,35 @@ def _user_id(user):
 
 @_request_cached
 def _program_id_for_grant_id(grant_id):
-    row = model.Session.query(model.GroupExtra.value).filter(
+    # Joined to the program group and filtered on its state, matching
+    # ``_group_id`` and ``_grants_in_program_id``. Without the join a deleted
+    # program went on being reported as a grant's program: the grant vanished
+    # from ``migration.orphan_grants`` (which tests this for ``None``, and a
+    # dead id is not None), so ``migrate-roles`` reported no orphans for a site
+    # that had them, while ``labels`` kept stamping ``program-<dead id>`` and
+    # ``in-any-program`` on its private datasets -- leaving them readable by
+    # every *other* program's administrator at the same moment the program's
+    # own readers lost them, and with no program role able to administer the
+    # grant at all.
+    row = model.Session.query(model.GroupExtra.value).join(
+        model.Group, model.Group.id == model.GroupExtra.value
+    ).filter(
         model.GroupExtra.group_id == grant_id,
         model.GroupExtra.key == OWNER_GROUP_EXTRA,
         model.GroupExtra.state == u'active',
+        model.Group.state == u'active',
+        model.Group.is_organization.is_(False),
     ).first()
     if not row:
         return None
-    # "No program" has two spellings in the production data: no row at all,
-    # and the key present with an empty value. A substantial minority of grants
-    # are the second kind, so ``or None`` here is load-bearing, not defensive.
-    # `ckan nfwf-permissions migrate-roles` reports the current count.
+    # "No program" has more than one spelling: no ``owner_group`` row at all,
+    # the key present with an empty value, and now also a value naming a group
+    # that is deleted or is not a program. The join above accounts for all of
+    # them by simply failing to match, which is why this is reached only with a
+    # real, active program id -- ``or None`` is belt and braces now rather than
+    # the thing doing the work, and is kept only so a future change to the
+    # query cannot silently start returning ``''``.
+    # `ckan nfwf-permissions migrate-roles` reports how many grants have none.
     return row[0] or None
 
 

@@ -625,6 +625,49 @@ def _assert_membership_is_allowed(context, group_ref, user_ref, capacity):
             u'that first.').format(user.name, held)]})
 
 
+def _assert_no_group_hierarchy(context):
+    """Refuse a group-to-group membership row.
+
+    The role model has no concept of one. A grant points at its program
+    through the ``owner_group`` extra precisely *because* it is not a CKAN
+    hierarchy -- ``logic/auth.py``'s second layer exists because none of
+    CKAN's native cascading reaches it. A ``Member`` row with
+    ``table_name='group'`` reintroduces exactly that cascading, outside the
+    model and outside the audit.
+
+    Demonstrated before this guard existed: a Program Administrator could
+    write ``member_create(id=<a grant in their program>, object=<any other
+    grant>, object_type='group')``. ``member_create``'s auth function checks
+    only ``id``, never ``object``, so the parent could be a grant from a
+    different program. That makes the parent's holders of the retired grant
+    ``admin`` capacity -- accounts ``user_role`` reports as holding *no role* --
+    gain full authority over the child grant through
+    ``has_user_permission_for_group_or_org``'s cascade, with no membership row
+    on it. ``migration.py`` filters on ``table_name == 'user'`` throughout, so
+    the report certifies a site whose effective permissions no longer match
+    the role model.
+
+    Only ``organization``-typed parents actually fire the cascade, since
+    ``get_parent_group_hierarchy`` is scoped to the child's own type -- a
+    program parent is filtered out. Both are refused anyway: the distinction
+    is CKAN's to change, not ours to depend on.
+
+    ``ignore_auth`` and Platform Administrators are exempt, matching
+    ``_assert_grant_belongs_to_an_administered_program``. Nothing in this
+    extension writes such a row, so the exemption costs nothing today and
+    leaves a sysadmin able to build a hierarchy deliberately if CKAN's own
+    features ever need one.
+    """
+    if context.get(u'ignore_auth'):
+        return
+    if authz.is_sysadmin(context.get(u'user')):
+        return
+    raise toolkit.ValidationError({u'object_type': [toolkit._(
+        u'Programs and grants are related through the grant\'s program field, '
+        u'not through group membership. Only a Platform Administrator may '
+        u'create a group-to-group relationship.')]})
+
+
 @toolkit.chained_action
 def member_create(original_action, context, data_dict):
     """Guard the role model on the generic membership action.
@@ -634,10 +677,13 @@ def member_create(original_action, context, data_dict):
     conflict.
     """
     data_dict = data_dict or {}
-    if data_dict.get(u'object_type') == u'user':
+    object_type = data_dict.get(u'object_type')
+    if object_type == u'user':
         _assert_membership_is_allowed(
             context, data_dict.get(u'id'), data_dict.get(u'object'),
             data_dict.get(u'capacity'))
+    elif object_type == u'group':
+        _assert_no_group_hierarchy(context)
     return original_action(context, data_dict)
 
 
