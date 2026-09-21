@@ -13,7 +13,34 @@ __all__ = [
     u'nfwf_status_list',
     u'nfwf_role',
     u'platform_or_program_admin_not_empty',
+    u'nfwf_owner_org_validator',
 ]
+
+
+def nfwf_owner_org_validator(key, data, errors, context):
+    """Core's ``owner_org_validator``, plus Program Administrators.
+
+    Core requires a membership row on the target grant conferring
+    ``create_dataset`` (``ckan/logic/validators.py:84-89``). A Program
+    Administrator holds none -- that is the entire premise of this extension --
+    so passing ``package_create``'s auth check bought them nothing: the action
+    then died in *validation* with "You cannot add a dataset to this
+    organization", and the role's headline capability did not work at all.
+    Reproduced end to end before this validator existed.
+
+    ``ignore_auth`` is injected into a **copy** of the context, and only for a
+    caller who genuinely administers that grant's program. Inside core's
+    validator that flag gates exactly one thing -- the membership check above --
+    so nothing else it enforces is relaxed: the unowned-dataset rules, the
+    collaborator branch and the group-exists check all still run, and the
+    copy keeps the caller's real context untouched for everything downstream.
+    """
+    value = data.get(key)
+    if value and not context.get(u'ignore_auth'):
+        if roles.is_program_admin_for_grant(context.get(u'user'), value):
+            context = dict(context, ignore_auth=True)
+    return toolkit.get_validator(u'owner_org_validator')(
+        key, data, errors, context)
 
 
 def platform_or_program_admin_not_empty(key, data, errors, context):

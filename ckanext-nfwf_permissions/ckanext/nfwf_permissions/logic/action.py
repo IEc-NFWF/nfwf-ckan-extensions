@@ -14,6 +14,7 @@ import logging
 
 from ckan import authz, model
 from ckan.lib import search
+from ckan.lib.dictization import model_dictize
 from ckan.plugins import toolkit
 
 from ckanext.nfwf_permissions import accounts, roles
@@ -35,6 +36,7 @@ __all__ = [
     u'member_create',
     u'organization_member_create',
     u'group_member_create',
+    u'organization_list_for_user',
 ]
 
 #: US 0117 slide 4: "Default display 20 users".
@@ -663,3 +665,56 @@ def group_member_create(original_action, context, data_dict):
         data_dict.get(u'username') or data_dict.get(u'id_or_name'),
         data_dict.get(u'role'))
     return original_action(context, data_dict)
+
+
+@toolkit.chained_action
+def organization_list_for_user(original_action, context, data_dict):
+    """Add the grants in the subject's programs to what stock returns.
+
+    Stock builds this list purely from the subject's own membership rows
+    (``ckan/logic/action/get.py:700-731``), and a Program Administrator holds
+    none on the grants they administer -- so it came back **empty** for them.
+    That is what both dataset-form templates gate their Grant selector on, so
+    the form rendered with no grant to choose and the submit could not
+    succeed. The ``package_create`` auth override got them to the form; this
+    is what puts anything in the dropdown.
+
+    Capacity is reported as ``admin`` because that is what the permission
+    matrix actually grants them over these grants -- organization_update and
+    _delete, member_create, package_create and _update, dataset_purge. The
+    requested ``permission`` is deliberately not consulted for the same
+    reason: ``admin`` satisfies every permission check in CKAN
+    (``ckan/authz.py:357-358``), so any permission stock might be asked about
+    is one they hold here.
+
+    Sysadmins need no special case: stock already returns every organization
+    for them, so the set difference below is empty and nothing is added.
+    """
+    orgs = original_action(context, data_dict)
+    data_dict = data_dict or {}
+
+    subject = data_dict.get(u'id') or context.get(u'user')
+    administered = roles.programs_for_user(subject, [roles.CAPACITY_ADMIN])
+    if not administered:
+        return orgs
+
+    wanted = set()
+    for program_id in administered:
+        wanted |= roles.grants_in_program(program_id)
+    missing = sorted(wanted - {org.get(u'id') for org in orgs})
+    if not missing:
+        return orgs
+
+    groups = model.Session.query(model.Group).filter(
+        model.Group.id.in_(missing),
+        model.Group.state == u'active').all()
+
+    # Dictized exactly as stock does, so callers cannot tell the two halves
+    # of the list apart -- including the capacity key, which the templates read.
+    context[u'with_capacity'] = True
+    return orgs + model_dictize.group_list_dictize(
+        [(group, roles.CAPACITY_ADMIN) for group in groups], context,
+        with_package_counts=toolkit.asbool(
+            data_dict.get(u'include_dataset_count')),
+        with_member_counts=toolkit.asbool(
+            data_dict.get(u'include_member_count')))

@@ -499,6 +499,27 @@ def can_admin_grant(user=None):
             return False
     return roles.administers_grants(user)
 
+def program_aware_owner_org_validator(key, data, errors, context):
+    """Core's owner_org_validator, widened for Program Administrators.
+
+    Core requires a membership row on the target grant conferring
+    create_dataset, which a Program Administrator does not have -- so without
+    this, they pass package_create's auth check and are then refused during
+    validation with "You cannot add a dataset to this organization". Verified
+    end to end: auth returned True and the action still raised.
+
+    Soft-imported for the same reason as grant_admin_not_empty above: if
+    ckanext-nfwf_permissions is not installed, fall back to core's validator
+    unchanged so nfwf_fields stays independently deployable.
+    """
+    try:
+        from ckanext.nfwf_permissions.logic.validators import (
+            nfwf_owner_org_validator)
+    except ImportError:
+        return toolkit.get_validator('owner_org_validator')(
+            key, data, errors, context)
+    return nfwf_owner_org_validator(key, data, errors, context)
+
 def grant_admin_not_empty(key, data, errors, context):
     """Required for whoever administers grants, ignored for everyone else.
 
@@ -1377,6 +1398,9 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
 
     def _modify_package_schema(self, schema):
         schema.update({
+            # Program Administrators administer a grant without holding a
+            # member row on it, which core's own owner_org_validator refuses.
+            'owner_org': [program_aware_owner_org_validator],
             'title': [toolkit.get_validator('not_empty')],
             'notes': [toolkit.get_validator('not_empty')],
             'principal_investigator': [toolkit.get_validator('not_empty'),
