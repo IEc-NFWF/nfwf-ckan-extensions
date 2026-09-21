@@ -185,3 +185,98 @@ class TestOrganizationListForUser(object):
 
         assert len(names) == len(set(names))
         assert world.foreign_grant[u'name'] in names
+
+
+@pytest.mark.usefixtures(u'clean_db', u'with_plugins')
+class TestReindexFailureIsSurvivable(object):
+    """A Solr failure during a program move must not fail the request.
+
+    By the time the reindex runs, ``_group_or_org_update`` has already
+    committed the move (ckan/logic/action/update.py:717), so raising would
+    report a change that really happened as a failure. Worse, the obvious
+    response -- resubmit the form -- repairs nothing: ``before`` is then read
+    from the committed value, so the change-detection finds no change and
+    skips the reindex. Recovery is necessarily out-of-band, which is why the
+    failure is logged with the remedy rather than raised.
+    """
+
+    def _grant_in(self, program_id):
+        grant = factories.Organization(extras=[
+            {u'key': roles.OWNER_GROUP_EXTRA, u'value': program_id}])
+        factories.Dataset(owner_org=grant[u'id'], private=True)
+        return grant
+
+    def _move(self, grant_id, program_id):
+        extra = model.Session.query(model.GroupExtra).filter(
+            model.GroupExtra.group_id == grant_id,
+            model.GroupExtra.key == roles.OWNER_GROUP_EXTRA).first()
+        extra.value = program_id
+        model.Session.commit()
+        roles.clear_cache()
+
+    def test_a_solr_failure_does_not_raise(self, monkeypatch):
+        from ckan.lib import search
+        from ckanext.nfwf_permissions.logic import action
+
+        old, new = factories.Group(), factories.Group()
+        grant = self._grant_in(old[u'id'])
+
+        def boom(*a, **kw):
+            raise search.SearchIndexError(u'solr is down')
+
+        monkeypatch.setattr(search, u'rebuild', boom)
+        self._move(grant[u'id'], new[u'id'])
+
+        # Must not propagate -- the move is already committed.
+        action._reindex_if_program_changed({u'id': grant[u'id']}, old[u'id'])
+
+    def test_the_failure_is_logged_with_the_remedy(self, monkeypatch, caplog):
+        from ckan.lib import search
+        from ckanext.nfwf_permissions.logic import action
+
+        old, new = factories.Group(), factories.Group()
+        grant = self._grant_in(old[u'id'])
+        monkeypatch.setattr(search, u'rebuild', lambda *a, **kw: (_ for _ in ()).throw(
+            search.SearchIndexError(u'solr is down')))
+        self._move(grant[u'id'], new[u'id'])
+
+        action._reindex_if_program_changed({u'id': grant[u'id']}, old[u'id'])
+
+        assert u'search-index rebuild' in caplog.text
+        assert u'Resubmitting the form will NOT fix this' in caplog.text
+
+    def test_a_successful_move_still_reindexes_and_commits(self, monkeypatch):
+        from ckan.lib import search
+        from ckanext.nfwf_permissions.logic import action
+
+        old, new = factories.Group(), factories.Group()
+        grant = self._grant_in(old[u'id'])
+        called = {u'rebuild': 0, u'commit': 0}
+        monkeypatch.setattr(search, u'rebuild',
+                            lambda *a, **kw: called.__setitem__(
+                                u'rebuild', called[u'rebuild'] + 1))
+        monkeypatch.setattr(search, u'commit',
+                            lambda *a, **kw: called.__setitem__(
+                                u'commit', called[u'commit'] + 1))
+        self._move(grant[u'id'], new[u'id'])
+
+        action._reindex_if_program_changed({u'id': grant[u'id']}, old[u'id'])
+
+        assert called == {u'rebuild': 1, u'commit': 1}
+
+    def test_no_move_means_no_reindex(self, monkeypatch):
+        """The change-detection that also makes a retry a no-op."""
+        from ckan.lib import search
+        from ckanext.nfwf_permissions.logic import action
+
+        program = factories.Group()
+        grant = self._grant_in(program[u'id'])
+        called = {u'n': 0}
+        monkeypatch.setattr(search, u'rebuild',
+                            lambda *a, **kw: called.__setitem__(
+                                u'n', called[u'n'] + 1))
+
+        action._reindex_if_program_changed({u'id': grant[u'id']},
+                                           program[u'id'])
+
+        assert called[u'n'] == 0

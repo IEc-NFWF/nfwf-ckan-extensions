@@ -545,6 +545,17 @@ def _reindex_if_program_changed(organization, before):
     than a background job that needs a worker process to exist -- which this
     deployment does not run. A bulk change of ``owner_group``, as the role
     migration does, still needs a full ``ckan search-index rebuild``.
+
+    **Known limitation, deliberately not solved here.** The change-detection
+    above is what makes a *retry* useless: if the reindex fails, the database
+    move is already committed, so the next identical request reads ``before``
+    as the new program, finds no change, and returns early without reindexing
+    anything. Recovery is therefore always out-of-band -- see the handler
+    below, which logs the remedy. Making the retry work would mean comparing
+    against what Solr actually holds rather than against the database, and
+    that costs a Solr query on every grant edit to buy robustness against a
+    failure that needs Solr to be down mid-write. If that trade ever looks
+    wrong, this is the place to change it.
     """
     roles.clear_cache()
     if roles.program_id_for_grant(organization[u'id']) == before:
@@ -558,17 +569,40 @@ def _reindex_if_program_changed(organization, before):
 
     log.info(u'Grant %s changed program; reindexing %d dataset(s)',
              organization[u'id'], len(package_ids))
-    search.rebuild(package_ids=package_ids, quiet=True)
+    try:
+        search.rebuild(package_ids=package_ids, quiet=True)
 
-    # The explicit commit is required, not belt and braces. `rebuild`'s
-    # package_ids branch calls `update_dict(pkg_dict, True)` -- hard-coding
-    # defer_commit=True regardless of what the caller asked for -- and the
-    # `model.Session.commit()` at the end of it commits the *database* session,
-    # not Solr (ckan/lib/search/__init__.py:198-201, 250). So without this the
-    # new labels sit uncommitted and every search still answers from the old
-    # ones. Caught by the reindex test, which saw a moved grant's dataset still
-    # visible to the previous program's readers.
-    search.commit()
+        # `rebuild`'s package_ids branch calls `update_dict(pkg_dict, True)`,
+        # hard-coding defer_commit=True regardless of what the caller asked
+        # for, and the `model.Session.commit()` at the end of it commits the
+        # *database* session, not Solr
+        # (ckan/lib/search/__init__.py:196-201, 250). This deployment's Solr
+        # does autoSoftCommit every 3s, so the labels would surface on their
+        # own eventually -- but committing here closes the redirect-after-POST
+        # window, so the admin's next page load is already correct rather than
+        # briefly showing the old visibility.
+        search.commit()
+    except Exception:
+        # The database move is already committed by this point
+        # (`_group_or_org_update` commits at ckan/logic/action/update.py:717
+        # before `original_action` returns), so failing the request now would
+        # report a move that actually happened as a failure -- and the natural
+        # response, resubmitting the form, repairs nothing: `before` is then
+        # read from the committed value, `before == after`, and the early
+        # return above skips the reindex entirely. Verified.
+        #
+        # So this swallows and shouts instead. The datasets keep the *old*
+        # program's permission labels until someone reindexes, which means the
+        # previous program's readers retain access to private data -- exactly
+        # what this function exists to prevent -- so the log has to name the
+        # remedy rather than just the error.
+        log.exception(
+            u'Grant %s moved program but its datasets could NOT be '
+            u'reindexed. They still carry the previous program\'s permission '
+            u'labels, so the old program\'s readers can still see them. '
+            u'Resubmitting the form will NOT fix this -- run '
+            u'`ckan search-index rebuild` (or rebuild just these ids: %s).',
+            organization[u'id'], u' '.join(package_ids))
 
 
 # -- Chained membership actions ----------------------------------------------
