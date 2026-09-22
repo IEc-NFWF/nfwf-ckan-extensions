@@ -243,10 +243,12 @@ def last_admin(clean_db):
 
 @pytest.mark.usefixtures(u'with_plugins')
 class TestPlatformAdministratorsCannotAllBeRemoved(object):
-    """Every action in logic/action.py is Platform-Administrator-only.
+    """Only a Platform Administrator can appoint a Platform Administrator.
 
-    So removing the last one is not a recoverable mistake from inside the
-    product: it takes ``ckan sysadmin add`` on the server to undo.
+    A Program Administrator reaches ``nfwf_user_role_set`` but cannot assign
+    that role -- ``roles.PROGRAM_ADMIN_ASSIGNABLE_ROLES`` leaves it out -- so
+    removing the last one is not a recoverable mistake from inside the product:
+    it takes ``ckan sysadmin add`` on the server to undo.
     """
 
     def test_the_last_one_cannot_be_demoted(self, last_admin):

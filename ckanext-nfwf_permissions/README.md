@@ -53,18 +53,40 @@ Validation failures come back as HTTP 409 with per-field messages:
 
 ## Authorization
 
-**Platform Administrator only**, for every action here.
-
 A Platform Administrator *is* a CKAN sysadmin — CKAN's authorization
 short-circuits on the `sysadmin` flag before this extension's auth functions run,
-so they get through automatically. Everyone else gets `NotAuthorized` (HTTP 403).
+so they get through everything automatically.
 
-The user management screen also asks for Program Administrators to see the
-users within their own program. The permission matrix that would let them is in
-place, but this API is still **Platform Administrator only** — a program-scoped
-user list is a filtered result rather than an all-or-nothing permission, so it
-needs a filter argument and a decision about what a Program Administrator should
-see. Build against Platform Administrator only for now.
+The rest of the API splits in two, and the split is the redesign document's:
+
+| Actions | Who |
+|---|---|
+| `nfwf_user_list`, `nfwf_user_role_show`, `nfwf_user_role_set`, `nfwf_role_options` | Platform Administrators, **and Program Administrators within their own program** |
+| `nfwf_user_approve`, `nfwf_user_reject`, `nfwf_user_deactivate` | Platform Administrators only |
+
+The document lists "Assign user permissions for their program-associated
+grants/program reader" under Program Administrator, and lists "Approve
+new/remove user accounts" under Platform Administrator alone. Everyone else gets
+`NotAuthorized` (HTTP 403).
+
+**What "within their own program" means, exactly** — a Program Administrator:
+
+- sees only accounts assigned to a program they administer, or to a grant filed
+  under one, **plus** accounts with no assignment at all (otherwise they could
+  never find a new registration in order to give it a first role);
+- never sees, and cannot act on, a Platform Administrator — even one whose
+  retained program rows fall inside their scope;
+- may assign only **Grant Editor** and **Program Reader/Member**, and only to
+  their own programs and the grants under them;
+- gets `ObjectNotFound` (404), not `NotAuthorized`, for an account outside that
+  scope. Deliberate: a 403 would confirm the account exists, and this screen is
+  a list of real names and email addresses.
+
+Each of those is one sentence of the redesign read a particular way, and each is
+written in exactly one place. `roles.py` opens with **Where this code interprets
+the redesign** — an index from the sentence to the function that decides it, so
+a different reading is a rewrite of one short body rather than a hunt for the
+three places that had to agree.
 
 One core action is deliberately **not** Platform-Administrator-only:
 `user_autocomplete` is open to Program Administrators as well. They are allowed
@@ -211,6 +233,13 @@ program checkboxes, `grant` shows the grant picker, `null` shows neither.
 
 Grants are deliberately **not** returned here — see the open questions.
 
+The response above is what a **Platform Administrator** gets. For a Program
+Administrator both lists are narrowed to what they may actually save: `roles`
+drops Platform Administrator and Program Administrator, and `programs` contains
+only the programs they administer. Render whatever comes back rather than a
+hard-coded list of four — the modal is then correct for both callers without
+knowing which it is talking to, and `nfwf_user_role_set` refuses the rest anyway.
+
 ### `nfwf_user_role_show`
 
 `id` (user id or name) → the same shape `nfwf_user_role_set` returns. Use it to
@@ -316,8 +345,13 @@ Error paths:
    relax.
 3. **Reactivating a deactivated account.** Not in the mockups. If the ellipsis
    menu needs it, it is a one-line addition (`nfwf_user_reactivate`).
-4. **Program Administrator scope for the user table** — Task 117 mentions it;
-   deferred to the full permission matrix.
+4. **Program Administrator scope for the user table** — implemented 2026-09-22;
+   see [Authorization](#authorization). Two readings of it are still open and
+   both are one-line changes in `roles.py`: whether a Program Administrator may
+   appoint a *peer* Program Administrator (currently **no**, the narrower reading
+   — the document names only Grant Editor and Program Reader), and whether they
+   should see accounts that hold no assignment yet (currently **yes**, because
+   otherwise they can never give anyone a first role).
 5. **Which status transitions are legal?** Nothing currently stops
    `nfwf_user_reject` on an account that has been active for a year, or
    `nfwf_user_approve` on one that was already approved. Rejection reads like it
@@ -352,14 +386,19 @@ changing:
 - `ckan nfwf-permissions migrate-roles [--report CSV] [--apply]` — the role
   migration report. Dry run by default.
 
+- chained `member_roles_list` — narrows the Role dropdown on both stock member
+  screens to the capacities the role model actually uses: Grant Editor on a
+  grant, Program Administrator and Program Reader/Member on a program. Done by
+  chaining the action rather than overriding the two templates, because
+  `ckanext-nfwf_theme` already overrides both and a second override would depend
+  on plugin order to win. Presentation only — the guards above still decide what
+  is *accepted*.
+
 ### Still to come
 
-- Context-appropriate role labels on the member screens. `ckan/authz.py`'s
-  `roles_list()` is not context-aware, so `organization/member_new.html` and
-  `group/member_new.html` still offer CKAN's raw capacities. **Both are already
-  overridden by `ckanext-nfwf_theme`** — coordinate before touching them.
-- A program-scoped user list for Program Administrators (see
-  [Authorization](#authorization)).
+- Nothing from the compliance pass. The four gaps it found against the redesign
+  document were closed on 2026-09-22; what is left is the two open readings in
+  [Open questions](#open-questions) 4, which need NFWF rather than code.
 
 ### Depends on `ckanext-oauth2`
 

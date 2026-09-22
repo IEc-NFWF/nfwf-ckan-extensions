@@ -37,6 +37,7 @@ __all__ = [
     u'organization_member_create',
     u'group_member_create',
     u'organization_list_for_user',
+    u'member_roles_list',
 ]
 
 #: US 0117 slide 4: "Default display 20 users".
@@ -77,6 +78,7 @@ def nfwf_user_list(context, data_dict):
     """
     toolkit.check_access(u'nfwf_user_list', context, data_dict)
     data = _validated(data_dict, schema.nfwf_user_list_schema(), context)
+    scope = _callers_scope(context)
 
     # `natural_number_validator` accepts 0, and a limit of 0 would otherwise
     # return an empty page alongside a non-zero `count` -- which reads as "no
@@ -97,6 +99,18 @@ def nfwf_user_list(context, data_dict):
         role=data.get(u'role'),
         program_id=data.get(u'program_id'),
         grant_id=data.get(u'grant_id'))
+
+    # Scoped after the filters rather than inside `search_users`, because the
+    # scope is derived from membership rows exactly as `role` is, and that
+    # function's docstring explains why derived filters run in Python here
+    # rather than being duplicated as SQL.
+    #
+    # *Which* accounts are in scope is `roles.is_within_scope` and is not
+    # restated here -- the modal and the save ask the same function, so the
+    # three cannot disagree about what "their program" covers.
+    if scope is not None:
+        matches = [user for user in matches
+                   if roles.is_within_scope(user, *scope)]
 
     # Slice first, then build. A record costs two queries to name the user's
     # programs and grants, so building them before paging would charge every
@@ -122,7 +136,9 @@ def nfwf_user_role_show(context, data_dict):
     toolkit.check_access(u'nfwf_user_role_show', context, data_dict)
     data = _validated(data_dict, schema.nfwf_user_id_schema(), context)
 
-    return accounts.role_record(_user_or_404(data[u'id']))
+    user = _user_or_404(data[u'id'])
+    _assert_within_scope(_callers_scope(context), user)
+    return accounts.role_record(user)
 
 
 @toolkit.side_effect_free
@@ -139,14 +155,26 @@ def nfwf_role_options(context, data_dict):
     :rtype: dictionary with ``roles`` and ``programs``
     """
     toolkit.check_access(u'nfwf_role_options', context, data_dict)
+    scope = _callers_scope(context)
+
+    # Narrowed to what this caller may actually save, so the modal cannot offer
+    # a choice that `nfwf_user_role_set` will then refuse. The refusal stays in
+    # place regardless -- this is the courtesy, not the control.
+    offered = roles.ROLES
+    programs = accounts.programs()
+    if scope is not None:
+        offered = [role for role in roles.ROLES
+                   if role in roles.PROGRAM_ADMIN_ASSIGNABLE_ROLES]
+        programs = [program for program in programs
+                    if program[u'id'] in scope[0]]
 
     return {
         u'roles': [{
             u'value': role,
             u'label': roles.ROLE_LABELS[role],
             u'assigned_to': roles.ROLE_SCOPE[role],
-        } for role in roles.ROLES],
-        u'programs': accounts.programs(),
+        } for role in offered],
+        u'programs': programs,
     }
 
 
@@ -193,11 +221,21 @@ def nfwf_user_role_set(context, data_dict):
     _check_assignment_scope(role, program_ids, grant_ids)
 
     user = _user_or_404(data[u'id'])
+    scope = _callers_scope(context)
+    _assert_within_scope(scope, user)
     if role != roles.PLATFORM_ADMIN:
         _assert_an_administrator_remains(
             context, user, u'role', toolkit._(u'demote'))
     programs = _resolved(u'program_ids', program_ids, False)
     grants = _resolved(u'grant_ids', grant_ids, True)
+
+    # Checked against the *resolved* ids rather than what came in, so an id that
+    # does not exist is reported as unknown by `_resolved` above rather than as
+    # out of scope here -- two different mistakes deserving two different
+    # messages.
+    _assert_assignment_within_scope(
+        scope, role,
+        [group.id for group in programs], [group.id for group in grants])
 
     _apply_role(context, user, role, programs, grants)
 
@@ -244,6 +282,81 @@ def nfwf_user_deactivate(context, data_dict):
 
 
 # -- Internals ---------------------------------------------------------------
+
+def _callers_scope(context):
+    """How far this caller's view of the user table reaches.
+
+    ``None`` means "no limit" and is the answer for a Platform Administrator and
+    for ``ignore_auth``; otherwise a ``(program_ids, grant_ids)`` pair naming
+    the programs they administer and the grants filed under them.
+
+    This is the other half of ``auth._role_management``. That function decides
+    *whether* a Program Administrator gets in at all -- the only thing an auth
+    function can decide -- and this decides what they find once they are in.
+    Splitting it that way is forced: "sees their program" is a filter, and
+    ``is_authorized`` has nowhere to put one.
+
+    What the scope *contains* is `roles.administered_scope`; this only decides
+    who is exempt from having one. To give Program Administrators the unscoped
+    list, return ``None`` unconditionally -- every caller below already handles
+    that, because a Platform Administrator takes exactly that path.
+    """
+    if context.get(u'ignore_auth'):
+        return None
+    if authz.is_sysadmin(context.get(u'user')):
+        return None
+    caller = context.get(u'auth_user_obj') or context.get(u'user')
+    return roles.administered_scope(caller)
+
+
+def _assert_within_scope(scope, user, field=u'id'):
+    """Refuse to act on an account outside ``scope``.
+
+    Phrased as "no such account" rather than "not yours" deliberately: the
+    caller has no business knowing whether an id they cannot act on exists, and
+    the user-management screen is a list of real people's names and email
+    addresses. ``ObjectNotFound`` is also exactly what they would have got had
+    they typed a wrong id, so the two cases stay indistinguishable.
+    """
+    if scope is None:
+        return
+    if not roles.is_within_scope(user, *scope):
+        raise toolkit.ObjectNotFound(
+            toolkit._(u'User not found: {0}').format(user.name))
+
+
+def _assert_assignment_within_scope(scope, role, program_ids, grant_ids):
+    """Refuse a role, or an assignment, the caller may not hand out.
+
+    Three separate refusals, each with its own message, because they are three
+    different mistakes: asking for a role above your station, naming someone
+    else's program, and naming a grant outside your programs.
+    """
+    if scope is None:
+        return
+    program_scope, grant_scope = scope
+    errors = {}
+
+    if role not in roles.PROGRAM_ADMIN_ASSIGNABLE_ROLES:
+        errors[u'role'] = [toolkit._(
+            u'Only a Platform Administrator may assign {0}.').format(
+                roles.ROLE_LABELS[role])]
+
+    outside = [ref for ref in program_ids if ref not in program_scope]
+    if outside:
+        errors[u'program_ids'] = [toolkit._(
+            u'You administer none of these programs: {0}').format(
+                u', '.join(outside))]
+
+    outside = [ref for ref in grant_ids if ref not in grant_scope]
+    if outside:
+        errors[u'grant_ids'] = [toolkit._(
+            u'These grants are not in a program you administer: {0}').format(
+                u', '.join(outside))]
+
+    if errors:
+        raise toolkit.ValidationError(errors)
+
 
 def _validated(data_dict, action_schema, context):
     """Run ``data_dict`` through ``action_schema``, raising on any error.
@@ -308,8 +421,10 @@ def _check_assignment_scope(role, program_ids, grant_ids):
 def _assert_an_administrator_remains(context, user, field, verb):
     """Refuse anything that would leave the site with no Platform Administrator.
 
-    Every action in this file is Platform-Administrator-only, so removing the
-    last one leaves no account able to appoint another: recovery means
+    Appointing a Platform Administrator is Platform-Administrator-only -- a
+    Program Administrator cannot, `roles.PROGRAM_ADMIN_ASSIGNABLE_ROLES` leaves
+    the role out -- so removing the last one leaves no account able to appoint
+    another: recovery means
     ``ckan sysadmin add`` on the server, which needs a deploy key and somebody
     who knows that is the answer.
 
@@ -620,12 +735,16 @@ def _reindex_if_program_changed(organization, before):
 def _assert_membership_is_allowed(context, group_ref, user_ref, capacity):
     """Refuse a membership that would break the role model.
 
-    Two rules, both from the redesign:
+    Three rules, all from the redesign:
 
     * **The retired grant capacities.** Grant `member` and grant `admin` are
       gone; on a grant the only role is Grant Editor. Existing rows with those
       capacities are left alone for the migration to report on rather than
       being rewritten here -- but nothing new should be added.
+    * **The capacities a program carries.** Program Administrator and Program
+      Reader/Member, and nothing else. `roles.PROGRAM_CAPACITIES` is the list;
+      `member_roles_list` below narrows the dropdown from the same one, so the
+      screen and the guard cannot disagree about it.
     * **One role per user.** Settled 2026-08-19, and a conflict-of-interest
       control rather than a convenience: Program Reader is for outside
       contractors who are typically conflicted out of applying for grant funds,
@@ -644,10 +763,28 @@ def _assert_membership_is_allowed(context, group_ref, user_ref, capacity):
     if user is None:
         return
 
-    if group.is_organization and capacity in roles.RETIRED_GRANT_CAPACITIES:
+    if group.is_organization:
+        if capacity in roles.RETIRED_GRANT_CAPACITIES:
+            raise toolkit.ValidationError({u'capacity': [toolkit._(
+                u'{0} is no longer a role on a grant. Use {1}.').format(
+                    capacity, roles.ROLE_LABELS[roles.GRANT_EDITOR])]})
+    elif capacity and capacity not in roles.PROGRAM_CAPACITIES:
+        # The grant branch above names what is *retired*; this one names what is
+        # *allowed*, because on a program nothing was retired -- CKAN simply
+        # offers a third capacity the role model never adopted. An `editor` row
+        # on a program resolves to no role at all through `roles.user_role`, and
+        # earns no permission labels, so the account reads as roleless on the
+        # user-management screen while holding CKAN's `manage_group` on the
+        # program. Refused rather than reinterpreted: there is no role it could
+        # honestly be mapped to.
+        #
+        # `capacity` may be absent on a malformed call. Let the core action
+        # raise its own error for that rather than reporting None as a bad role.
         raise toolkit.ValidationError({u'capacity': [toolkit._(
-            u'{0} is no longer a role on a grant. Use {1}.').format(
-                capacity, roles.ROLE_LABELS[roles.GRANT_EDITOR])]})
+            u'{0} is not a role on a program. Use {1} or {2}.').format(
+                capacity,
+                roles.ROLE_LABELS[roles.PROGRAM_ADMIN],
+                roles.ROLE_LABELS[roles.PROGRAM_READER])]})
 
     # Would this leave the user holding both scopes at once?
     other_scope = (roles.programs_for_user(user) if group.is_organization
@@ -798,3 +935,63 @@ def organization_list_for_user(original_action, context, data_dict):
             data_dict.get(u'include_dataset_count')),
         with_member_counts=toolkit.asbool(
             data_dict.get(u'include_member_count')))
+
+
+@toolkit.chained_action
+@toolkit.side_effect_free
+def member_roles_list(original_action, context, data_dict):
+    """Offer only the capacities the role model actually uses on each screen.
+
+    Both stock Members screens render their Role dropdown from this action --
+    ``ckan/views/group.py`` calls it with the group's ``group_type`` and hands
+    the result to the template as ``roles``. Without this it returns CKAN's
+    unfiltered Admin / Editor / Member, so a grant's screen offered the two
+    capacities the redesign retires and a program's offered ``editor``, which is
+    not a role at all. Both were then refused on save by
+    ``_assert_membership_is_allowed`` -- a dropdown whose entries raise a
+    validation error is a worse experience than one that never offered them.
+
+    This is presentation only, and deleting the whole function changes nothing
+    about what is *accepted* -- it only puts the refused entries back in the
+    dropdown. That ordering matters: the dropdown is a courtesy and
+    ``_assert_membership_is_allowed`` is the control, and this codebase has a
+    standing rule that the UI is never the thing trusted to hide a role. Both
+    read ``roles.GRANT_CAPACITIES`` / ``PROGRAM_CAPACITIES``, so changing what a
+    screen offers means changing what the model recognises, in one place.
+
+    Chaining core's action rather than overriding the templates is deliberate.
+    ``nfwf_theme`` already overrides both ``member_new.html`` files, so a second
+    override here would depend on plugin order in ``ckan.plugins`` to win -- and
+    it would have to be written twice, once per screen, with the two copies free
+    to drift. One chained action covers both screens and every other caller.
+
+    Unrecognised shapes pass through untouched: if a future CKAN returns
+    something other than ``{'value': ..., 'text': ...}`` dictionaries, this
+    filters nothing rather than silently emptying the dropdown.
+    """
+    options = original_action(context, data_dict)
+    group_type = (data_dict or {}).get(u'group_type')
+    wanted = (roles.GRANT_CAPACITIES if group_type == u'organization'
+              else roles.PROGRAM_CAPACITIES)
+
+    if not isinstance(options, list) or not all(
+            isinstance(option, dict) and u'value' in option
+            for option in options):
+        log.warning(
+            u'member_roles_list returned an unexpected shape, so the role '
+            u'options were left unfiltered: %r', options)
+        return options
+
+    kept = [option for option in options if option[u'value'] in wanted]
+
+    # Never hand back an empty dropdown. If CKAN's capacity names ever stop
+    # matching ours, an unfiltered list is wrong but usable; an empty one makes
+    # the screen impossible to submit and gives no clue why.
+    if not kept:
+        log.warning(
+            u'None of CKAN\'s member roles %r matched the role model\'s %r, '
+            u'so the options were left unfiltered.',
+            [option[u'value'] for option in options], wanted)
+        return options
+
+    return kept

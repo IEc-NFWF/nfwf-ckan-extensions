@@ -72,9 +72,68 @@ CAPACITY_ORDER = [CAPACITY_ADMIN, CAPACITY_EDITOR, CAPACITY_MEMBER]
 #: membership actions and the migration command agree on what to reject.
 RETIRED_GRANT_CAPACITIES = [CAPACITY_MEMBER, CAPACITY_ADMIN]
 
+#: The capacities each kind of group actually carries under the new model, which
+#: is the positive statement of the same rule. A grant has one role on it; a
+#: program has two.
+GRANT_CAPACITIES = [CAPACITY_EDITOR]
+PROGRAM_CAPACITIES = [CAPACITY_ADMIN, CAPACITY_MEMBER]
+
 #: ``group_extra`` key on a grant organization naming the program it belongs
 #: to. The value is the program group's id.
 OWNER_GROUP_EXTRA = u'owner_group'
+
+
+# -- Where this code interprets the redesign ---------------------------------
+#
+# A compliance pass on 2026-09-22 read "User Roles and Permissions
+# Redesign.docx" and the estimates document, and found four requirements with
+# no implementation behind them. Closing them meant answering questions the
+# documents do not answer outright, so this is an index of every place the code
+# decides what a sentence *means*. It is meant to be read when NFWF decides
+# something different.
+#
+# Each entry is one short function or one list. Changing our reading of a
+# sentence means rewriting that one body -- not threading a flag through, and
+# not hunting for the other three places that had to agree with it. Where a
+# rule is needed in more than one place, exactly one of these defines it and
+# the callers ask; that is why the user list, the modal and the save cannot
+# drift apart on what "their program" means.
+#
+#   Sentence being read                      Where it is decided
+#   ---------------------------------------- ---------------------------------
+#   "Assign user permissions for their       `auth._role_management`
+#    program-associated grants/program        -- who reaches the role API
+#    reader" (Program Administrator)
+#
+#   ...which roles that lets them hand out   `PROGRAM_ADMIN_ASSIGNABLE_ROLES`
+#                                             below
+#
+#   "Platform Admin sees all; Program Admin  `administered_scope` and
+#    sees their program" (estimates, 117)     `is_within_scope` below
+#
+#   A program carries Program Administrator  `PROGRAM_CAPACITIES` above, read
+#   and Program Reader/Member                 by both
+#                                             `_assert_membership_is_allowed`
+#                                             and `member_roles_list`
+#
+#   "Add/edit/delete datasets ... under the  nothing -- stock CKAN already
+#    grant" (Grant Editor)                    does this; guarded by a test
+#
+# Two of these readings are genuinely open, and both are recorded in the
+# README's open questions rather than only here.
+
+#: Which roles a Program Administrator may hand out.
+#:
+#: The document names two -- "their program-associated grants" (Grant Editor)
+#: and "program reader" -- and is silent on whether they may appoint a *peer*
+#: Program Administrator. OPEN: this takes the narrower reading and leaves it
+#: out. Adding ``PROGRAM_ADMIN`` to this list is the whole change; the modal
+#: narrows itself from it, and `nfwf_user_role_set` refuses from it.
+#:
+#: Platform Administrator is not listed and must never be: the document reserves
+#: "Assign user permissions (including other Platform Administrators)" to
+#: Platform Administrators.
+PROGRAM_ADMIN_ASSIGNABLE_ROLES = [PROGRAM_READER, GRANT_EDITOR]
 
 # A user holds exactly one role (confirmed 2026-08-19). Platform Administrator
 # supersedes the others: it already implies everything a Grant Editor or Program
@@ -505,3 +564,73 @@ def is_program_admin_for_grant(user, grant):
     if program_id is None:
         return False
     return program_id in programs_for_user(user, [CAPACITY_ADMIN])
+
+
+# -- The reach of a Program Administrator ------------------------------------
+#
+# "Program Admin sees their program", written out. Two functions: what the
+# scope *is*, and who falls inside it. The user list, the modal and the save
+# all ask these rather than each working it out, so widening or narrowing the
+# reach is an edit to one of these two bodies and nothing else needs to know.
+
+
+def administered_scope(user):
+    """The programs ``user`` administers and every grant filed under them.
+
+    Returns ``(program_ids, grant_ids)`` as two sets, both empty for anyone who
+    is not a Program Administrator.
+
+    The sysadmin flag is deliberately not consulted, for the same reason
+    ``is_program_admin_for_grant`` does not consult it: a Platform Administrator
+    is answered by CKAN's short-circuit long before any of this runs, and their
+    *retained* program rows must not be mistaken for an active assignment.
+    Callers that need "sysadmins see everything" ask ``authz.is_sysadmin``
+    themselves, where it is visible.
+    """
+    program_ids = set(programs_for_user(user, [CAPACITY_ADMIN]))
+    grant_ids = set()
+    for program in program_ids:
+        grant_ids |= grants_in_program(program)
+    return program_ids, grant_ids
+
+
+def is_within_scope(subject, program_ids, grant_ids):
+    """Is ``subject`` an account a holder of that scope may act on?
+
+    Three rules, in the order they are written below.
+
+    A **Platform Administrator** is never in scope. Their retained assignments
+    may well fall inside it, and acting on one of those rows would let a Program
+    Administrator demote the account that outranks them.
+
+    An account with **no assignment at all** is in scope. OPEN: the literal
+    reading of "sees their program" would exclude a fresh registration, but that
+    leaves a Program Administrator unable to give anyone a first role, which is
+    the thing the document asks them to do. To take the literal reading instead,
+    delete the two lines marked below -- the last rule then answers it.
+
+    Otherwise the subject is in scope when an assignment they already hold falls
+    inside it.
+    """
+    if _is_sysadmin(subject):
+        return False
+
+    held_programs = set(programs_for_user(subject))
+    held_grants = set(grants_for_user(subject))
+
+    # Delete these two lines to exclude accounts that hold nothing yet.
+    if not held_programs and not held_grants:
+        return True
+
+    return bool(held_programs & program_ids) or bool(held_grants & grant_ids)
+
+
+def _is_sysadmin(user):
+    """``user.sysadmin``, for the several shapes callers pass around."""
+    if isinstance(user, model.User):
+        return bool(user.sysadmin)
+    user_id = _user_id(user)
+    if user_id is None:
+        return False
+    record = model.User.get(user_id)
+    return bool(record and record.sysadmin)

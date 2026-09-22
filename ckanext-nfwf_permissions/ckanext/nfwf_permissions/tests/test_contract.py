@@ -410,7 +410,12 @@ class TestAccountStatusActions(object):
 
 @pytest.mark.usefixtures(u'with_plugins')
 class TestAuthorization(object):
-    """Platform Administrator only, for every action in the contract."""
+    """Closed to an ordinary account, and open to a sysadmin, for every action.
+
+    The middle case -- a Program Administrator, who reaches four of these seven
+    and is scoped within them -- is in ``test_spec_compliance.py``. These two
+    are the outer bounds and hold whatever that scoping does.
+    """
 
     ACTIONS = [
         u'nfwf_user_list',

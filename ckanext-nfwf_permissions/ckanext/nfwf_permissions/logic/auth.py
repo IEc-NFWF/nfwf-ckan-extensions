@@ -135,26 +135,57 @@ def _administers_a_program(context):
 # -- The user-management API contract ----------------------------------------
 #
 # Returning False unconditionally means "Platform Administrator only", by way
-# of the short-circuit described above. The user-management screen also wants
-# Program Administrators to see the users within their own program; that is a
-# *filtered* list, so it belongs inside ``nfwf_user_list`` where a filter can
-# be applied, not here where the only answers are all or nothing.
+# of the short-circuit described above.
+#
+# The functions split into two groups, and the split is the document's, not a
+# convenience. **Account lifecycle** -- approve, reject, deactivate -- is listed
+# under Platform Administrator alone ("Approve new/remove user accounts") and
+# stays closed, through ``_platform_admin_only``. **Role assignment** is listed
+# under both, so the four actions the Manage Roles modal drives go through
+# ``_role_management`` instead.
+#
+# Which group an action belongs to is the one thing to change if the document is
+# read differently: move its name between the two blocks below. Nothing else
+# needs to know.
+#
+# What they may then *see and change* is not decided here. An auth function's
+# only answers are all or nothing, and the document's answer is "their own
+# program", which is a filter -- so the scoping lives in the actions, where a
+# filter can be expressed. Letting a caller in here is therefore only half of
+# the rule; ``action._callers_scope`` is the other half, and neither is safe
+# without the other.
 
 def _platform_admin_only(context, data_dict=None):
     return _denied(toolkit._(
         u'Only a Platform Administrator may manage user accounts and roles.'))
 
 
+def _role_management(context, data_dict=None):
+    """Platform Administrators, plus Program Administrators within their own.
+
+    See the note above for why "within their own" is not enforced here.
+    """
+    if _administers_a_program(context):
+        return _allowed()
+    return _denied(toolkit._(
+        u'Only a Platform Administrator, or a Program Administrator within '
+        u'their own program, may manage user roles.'))
+
+
 def nfwf_user_list(context, data_dict=None):
-    return _platform_admin_only(context, data_dict)
+    return _role_management(context, data_dict)
 
 
 def nfwf_user_role_show(context, data_dict=None):
-    return _platform_admin_only(context, data_dict)
+    return _role_management(context, data_dict)
 
 
 def nfwf_user_role_set(context, data_dict=None):
-    return _platform_admin_only(context, data_dict)
+    return _role_management(context, data_dict)
+
+
+def nfwf_role_options(context, data_dict=None):
+    return _role_management(context, data_dict)
 
 
 def nfwf_user_approve(context, data_dict=None):
@@ -166,10 +197,6 @@ def nfwf_user_reject(context, data_dict=None):
 
 
 def nfwf_user_deactivate(context, data_dict=None):
-    return _platform_admin_only(context, data_dict)
-
-
-def nfwf_role_options(context, data_dict=None):
     return _platform_admin_only(context, data_dict)
 
 
