@@ -67,12 +67,28 @@ def set_status(context, user, status):
 
     That validator is **not** a refusal. It returns early for a sysadmin or
     for ``ignore_auth`` and otherwise does ``data.pop(key)``
-    (``ckan/logic/validators.py:588-597``), so a caller who is neither gets
-    the field silently dropped: ``user_update`` commits, returns 200, and the
-    record this module then re-reads still shows the old value -- a write that
-    reports success and did nothing. Every caller here is a Platform
-    Administrator, so that path is not currently reachable, but it is a quiet
-    failure rather than a loud one if a future caller is not.
+    (``ckan/logic/validators.py:588-597``), so where it applies the field is
+    silently dropped: ``user_update`` commits, returns 200, and the record this
+    module then re-reads still shows the old value -- a write that reports
+    success and did nothing.
+
+    **Where it applies is the part worth being exact about**, because an
+    earlier version of this note gave the fragile reason for why that cannot
+    happen here -- "every caller is a Platform Administrator" -- and the real
+    reason is structural and survives new callers. Both halves were probed:
+
+    * A non-sysadmin patching **someone else** never reaches the validator.
+      ``user_update``'s own auth refuses first, loudly, with ``NotAuthorized``.
+      Every call through this module targets someone else, so this is the case
+      that matters, and the failure is loud.
+    * A non-sysadmin patching **themselves** does reach it, and does get the
+      quiet failure -- ``sysadmin=True`` returns normally and changes nothing.
+      Nothing here self-patches.
+
+    So adding callers who are not Platform Administrators does not open the
+    quiet path; ``nfwf_user_role_set`` now admits Program Administrators and a
+    test pins that they get ``NotAuthorized`` rather than a false success. What
+    *would* open it is a caller patching its own record -- don't.
 
     (An earlier version of this note also cited
     ``logic/action/update.py:834-838`` as a gate. It is not one: that block

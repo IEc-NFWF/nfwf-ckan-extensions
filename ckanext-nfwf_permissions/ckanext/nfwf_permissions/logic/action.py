@@ -498,10 +498,30 @@ def _resolved(field, wanted_ids, is_organization):
 def _apply_role(context, user, role, programs, grants):
     """Make the stored assignments say exactly ``role`` and nothing else.
 
-    Order matters. The other scope is cleared *before* the wanted one is
-    written, because the chained membership actions below refuse to leave a user
-    holding both a program and a grant assignment -- writing first would trip
-    the extension's own rule halfway through.
+    **This is two writes and it is not atomic**, which is the thing to know
+    before changing it. The old scope is cleared and the new one written, each
+    through the member actions, and each of those commits -- so a failure
+    between them leaves the account holding *nothing*, already committed.
+    Demonstrated, not theorised: patching the second call to raise leaves a
+    Program Reader with a `state='deleted'` program row and no grant row, and
+    `roles.user_role` then reports ``None``.
+
+    Reordering does not fix it, and an earlier version of this docstring was
+    wrong about why. It claimed the clear had to come first because the chained
+    membership guards refuse a user holding both scopes at once -- but
+    ``_replace_memberships`` calls those actions with ``ignore_auth``, and
+    ``_assert_membership_is_allowed`` returns early on exactly that, so no guard
+    ever fires here. Writing first is allowed. It just swaps one bad state for
+    another: the account then holds both scopes, which is the conflict-of-
+    interest violation the one-role rule exists to prevent, and ``user_role``
+    resolves it silently to whichever comes first in ``roles.ROLES``.
+
+    So the order is a genuine choice between two failure modes, and this keeps
+    the one it had: losing the role is visible to the person it happens to,
+    where holding two is visible to nobody. What is added below is recovery --
+    the cleared rows are marked ``deleted`` rather than purged, so the
+    information survives, and the only thing previously missing was anyone
+    being told. On failure this puts the old scope back and says what it did.
     """
     _set_sysadmin(context, user, role == roles.PLATFORM_ADMIN)
 
@@ -517,12 +537,64 @@ def _apply_role(context, user, role, programs, grants):
         roles.GRANT_EDITOR: roles.CAPACITY_EDITOR,
     }[role]
 
-    if roles.accepts_programs(role):
-        _replace_memberships(context, user, True, [], None)
-        _replace_memberships(context, user, False, programs, capacity)
-    else:
-        _replace_memberships(context, user, False, [], None)
-        _replace_memberships(context, user, True, grants, capacity)
+    wants_programs = roles.accepts_programs(role)
+
+    # Captured before anything is written, because that is the only moment the
+    # old state is still readable. Capacities included, not just group ids --
+    # see `roles.assignments_for_user`.
+    previously = roles.assignments_for_user(user, wants_programs)
+
+    _replace_memberships(context, user, wants_programs, [], None)
+    try:
+        _replace_memberships(
+            context, user, not wants_programs,
+            programs if wants_programs else grants, capacity)
+    except Exception:
+        _restore_after_failed_role_change(
+            context, user, wants_programs, previously)
+        raise
+
+
+def _restore_after_failed_role_change(context, user, was_organization,
+                                      assignments):
+    """Best-effort undo of the clear half, then let the original error stand.
+
+    Best-effort is the honest word: this runs *because* a write just failed, so
+    it may well fail for the same reason. It is still worth attempting -- the
+    likely cause is one group vanishing under us or a single statement
+    erroring, not the database being gone -- and when it cannot, the log line
+    below is what tells somebody which account to repair and what to put back.
+    Before this, the only record was a ``deleted`` row nobody knew to look for.
+
+    Written against the member actions with ``ignore_auth`` for the same reason
+    ``_replace_memberships`` is, and row by row rather than through it, because
+    each row goes back with the capacity it actually had.
+
+    The original exception is re-raised by the caller either way. Swallowing it
+    to report a clean success would be the worst outcome available.
+    """
+    if not assignments:
+        return
+
+    internal = {u'user': context.get(u'user'), u'ignore_auth': True}
+    try:
+        for group_id, held_capacity in assignments:
+            toolkit.get_action(u'member_create')(dict(internal), {
+                u'id': group_id, u'object': user.id, u'object_type': u'user',
+                u'capacity': held_capacity})
+        roles.clear_cache()
+        log.warning(
+            u'Role change for %s failed partway; its previous assignments '
+            u'were put back, so the account is as it was.', user.name)
+    except Exception:
+        log.exception(
+            u'Role change for %s failed partway AND could not be rolled '
+            u'back, so the account now holds no role. Restore these %s '
+            u'membership row(s) by hand -- %s -- or re-run nfwf_user_role_set '
+            u'once the underlying fault is fixed.',
+            user.name, u'grant' if was_organization else u'program',
+            u', '.join(u'{0} as {1}'.format(group_id, held_capacity)
+                       for group_id, held_capacity in assignments))
 
 
 def _replace_memberships(context, user, is_organization, groups, capacity):

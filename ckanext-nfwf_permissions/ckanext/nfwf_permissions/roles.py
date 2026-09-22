@@ -490,6 +490,21 @@ def grants_for_user(user, capacities=None):
     )
 
 
+def assignments_for_user(user, is_organization):
+    """``((group_id, capacity), ...)`` -- what they hold, capacities included.
+
+    The two functions above answer "which groups"; this answers "which groups,
+    and as what", which is what anything restoring a previous state needs. The
+    distinction is not academic: pre-migration accounts really do hold
+    different capacities on different grants, so putting a single capacity back
+    across all of them would quietly re-grade some of the rows it restored.
+    """
+    user_id = _user_id(user)
+    if user_id is None:
+        return ()
+    return _memberships(user_id, is_organization)
+
+
 # -- The role a user holds ---------------------------------------------------
 
 @_request_cached
@@ -609,8 +624,26 @@ def is_within_scope(subject, program_ids, grant_ids):
     the thing the document asks them to do. To take the literal reading instead,
     delete the two lines marked below -- the last rule then answers it.
 
-    Otherwise the subject is in scope when an assignment they already hold falls
-    inside it.
+    Otherwise **every** assignment the subject holds has to fall inside the
+    scope, not merely one of them. "Any" was tried first and was wrong twice
+    over, which is worth recording because the data makes it the common case
+    rather than an edge: the migration report shows most accounts currently hold
+    both a program and a grant assignment.
+
+    * It leaked. A Program Administrator of one program saw, in the account's
+      record, the name of a grant belonging to a different program -- the exact
+      cross-program visibility the scoping exists to prevent.
+    * Worse, it made the Manage Roles modal a trap. The record populates it,
+      ``nfwf_user_role_set`` replaces assignments wholesale, and it checks the
+      submitted ids against this same scope -- so saving either failed with a
+      refusal the caller could do nothing about, or, had the record been
+      filtered to hide the other grant, would have silently deleted it.
+
+    Requiring the whole account to sit inside the scope removes both. The cost
+    is that a dual-scope account is invisible to a Program Administrator until
+    somebody resolves it, which is the right answer: one-role-per-user says that
+    account should not exist, and deciding which side it keeps is a Platform
+    Administrator's call, not a side effect of someone else's edit.
     """
     if _is_sysadmin(subject):
         return False
@@ -622,7 +655,8 @@ def is_within_scope(subject, program_ids, grant_ids):
     if not held_programs and not held_grants:
         return True
 
-    return bool(held_programs & program_ids) or bool(held_grants & grant_ids)
+    return (held_programs <= set(program_ids)
+            and held_grants <= set(grant_ids))
 
 
 def _is_sysadmin(user):

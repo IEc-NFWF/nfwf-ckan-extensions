@@ -71,9 +71,16 @@ new/remove user accounts" under Platform Administrator alone. Everyone else gets
 
 **What "within their own program" means, exactly** — a Program Administrator:
 
-- sees only accounts assigned to a program they administer, or to a grant filed
-  under one, **plus** accounts with no assignment at all (otherwise they could
+- sees only accounts **all** of whose assignments sit inside a program they
+  administer, **plus** accounts with no assignment at all (otherwise they could
   never find a new registration in order to give it a first role);
+- does **not** see an account that also holds an assignment elsewhere — most
+  production accounts are currently like this, because one-role-per-user
+  postdates the data. Requiring the whole account rather than any one row is
+  deliberate: `nfwf_user_role_set` replaces assignments wholesale, so a partial
+  view would mean either a save that cannot succeed or one that silently
+  deletes the half the caller could not see. Resolving those accounts is a
+  Platform Administrator's job and the migration report lists them;
 - never sees, and cannot act on, a Platform Administrator — even one whose
   retained program rows fall inside their scope;
 - may assign only **Grant Editor** and **Program Reader/Member**, and only to

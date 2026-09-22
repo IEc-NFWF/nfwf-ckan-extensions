@@ -26,6 +26,7 @@ from ckan import model
 from ckan.plugins import toolkit
 
 from ckanext.nfwf_permissions import roles
+from ckanext.nfwf_permissions.logic import action
 
 
 def _assign(group_id, user_name, capacity):
@@ -366,3 +367,163 @@ class TestGrantEditorDeletes(object):
                 {u'model': model, u'user': world.editor_a[u'name'],
                  u'auth_user_obj': model.User.get(world.editor_a[u'id'])},
                 id=dataset[u'id'])
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestRoleChangeIsNotAtomic(object):
+    """`_apply_role` clears one scope then writes the other, and each half
+    commits. A failure between them used to leave the account holding nothing,
+    silently -- the cleared rows were marked `deleted`, so the information
+    survived, but nobody was told where to look.
+
+    Reordering is not the fix and an earlier docstring was wrong about why: the
+    guards it said would refuse a write-first order are bypassed by the
+    `ignore_auth` that same path passes. Writing first is allowed; it just
+    leaves the account holding both scopes instead, which is the
+    conflict-of-interest state the one-role rule exists to prevent.
+    """
+
+    def _explode_on_the_second_call(self, monkeypatch):
+        real = action._replace_memberships
+        calls = []
+
+        def exploding(context, user, is_organization, groups, capacity):
+            calls.append(is_organization)
+            if len(calls) == 2:
+                raise RuntimeError(u'simulated failure writing the new scope')
+            return real(context, user, is_organization, groups, capacity)
+
+        monkeypatch.setattr(action, u'_replace_memberships', exploding)
+
+    def test_the_previous_role_is_put_back(self, world, monkeypatch):
+        assert roles.user_role(world.reader_a[u'name']) == roles.PROGRAM_READER
+        self._explode_on_the_second_call(monkeypatch)
+
+        with pytest.raises(RuntimeError):
+            _as(world.sysadmin[u'name'], u'nfwf_user_role_set',
+                id=world.reader_a[u'name'], role=roles.GRANT_EDITOR,
+                grant_ids=[world.grant_a[u'id']])
+
+        roles.clear_cache()
+        assert roles.user_role(world.reader_a[u'name']) == roles.PROGRAM_READER
+        assert roles.programs_for_user(world.reader_a[u'name']) == frozenset(
+            [world.program_a[u'id']])
+
+    def test_the_failure_is_still_raised(self, world, monkeypatch):
+        """Restoring must not turn a failed write into a reported success."""
+        self._explode_on_the_second_call(monkeypatch)
+
+        with pytest.raises(RuntimeError):
+            _as(world.sysadmin[u'name'], u'nfwf_user_role_set',
+                id=world.reader_a[u'name'], role=roles.GRANT_EDITOR,
+                grant_ids=[world.grant_a[u'id']])
+
+    def test_an_account_with_nothing_to_restore_is_unharmed(
+            self, world, monkeypatch):
+        """The newcomer holds no assignment, so there is nothing to put back
+        and the restore path must not invent one."""
+        self._explode_on_the_second_call(monkeypatch)
+
+        with pytest.raises(RuntimeError):
+            _as(world.sysadmin[u'name'], u'nfwf_user_role_set',
+                id=world.newcomer[u'name'], role=roles.GRANT_EDITOR,
+                grant_ids=[world.grant_a[u'id']])
+
+        roles.clear_cache()
+        assert roles.user_role(world.newcomer[u'name']) is None
+        assert not roles.grants_for_user(world.newcomer[u'name'])
+
+    def test_capacities_are_restored_per_group_not_flattened(self, world):
+        """`assignments_for_user` carries the capacity of each row.
+
+        Pre-migration accounts hold different capacities on different grants,
+        so a restore that wrote one capacity across all of them would quietly
+        re-grade some. This pins the accessor the restore depends on.
+        """
+        other = factories.Organization(extras=[{
+            u'key': roles.OWNER_GROUP_EXTRA,
+            u'value': world.program_a[u'id']}])
+        _assign(other[u'id'], world.editor_a[u'name'], roles.CAPACITY_EDITOR)
+        roles.clear_cache()
+
+        held = dict(roles.assignments_for_user(world.editor_a[u'name'], True))
+
+        assert held[world.grant_a[u'id']] == roles.CAPACITY_EDITOR
+        assert held[other[u'id']] == roles.CAPACITY_EDITOR
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestDualScopeAccountsAreOutOfReach(object):
+    """An account holding assignments on both sides of the caller's scope.
+
+    Not an edge case: the migration report shows most production accounts are
+    currently like this, because one-role-per-user postdates the data.
+
+    `is_within_scope` used to admit an account if *any* assignment intersected
+    the scope, which leaked and also made the modal unusable. See its docstring
+    for both. These pin the behaviour that replaced it.
+    """
+
+    @pytest.fixture
+    def dual(self, world):
+        """Holds program A -- the caller's -- and a grant under program B."""
+        user = factories.User()
+        _assign(world.program_a[u'id'], user[u'name'], roles.CAPACITY_MEMBER)
+        _assign(world.grant_b[u'id'], user[u'name'], roles.CAPACITY_EDITOR)
+        roles.clear_cache()
+        return user
+
+    def test_the_other_programs_grant_is_not_disclosed(self, world, dual):
+        """The leak itself: the record named a grant from another program."""
+        listed = _as(world.admin_a[u'name'], u'nfwf_user_list')
+        rows = {record[u'name']: record for record in listed[u'results']}
+
+        assert dual[u'name'] not in rows
+
+    def test_the_modal_cannot_open_on_one_either(self, world, dual):
+        """The same record reached through `nfwf_user_role_show`.
+
+        Closing only the list would have left the modal leaking it, since both
+        read the same record.
+        """
+        with pytest.raises(toolkit.ObjectNotFound):
+            _as(world.admin_a[u'name'], u'nfwf_user_role_show',
+                id=dual[u'name'])
+
+    def test_and_cannot_be_written_to(self, world, dual):
+        """The trap, not just the disclosure.
+
+        `nfwf_user_role_set` replaces assignments wholesale. Reachable-but-
+        unsavable was the old behaviour; now it is simply out of reach, so a
+        Program Administrator cannot half-rewrite an account whose other half
+        they cannot see.
+        """
+        with pytest.raises(toolkit.ObjectNotFound):
+            _as(world.admin_a[u'name'], u'nfwf_user_role_set',
+                id=dual[u'name'], role=roles.GRANT_EDITOR,
+                grant_ids=[world.grant_a[u'id']])
+
+    def test_a_platform_administrator_still_sees_them(self, world, dual):
+        """Somebody has to be able to resolve these, and it is not the Program
+        Administrator -- deciding which side the account keeps is exactly the
+        call one-role-per-user reserves for a Platform Administrator."""
+        listed = _as(world.sysadmin[u'name'], u'nfwf_user_list')
+
+        assert dual[u'name'] in {r[u'name'] for r in listed[u'results']}
+
+    def test_an_account_wholly_inside_the_scope_is_still_reachable(
+            self, world):
+        """The narrowing must not catch accounts that only look dual-scope.
+
+        Program A plus a grant *under* program A is still one-role-per-user
+        breakage, but every row sits inside this caller's scope, so resolving
+        it is their business and they keep the access to do it.
+        """
+        user = factories.User()
+        _assign(world.program_a[u'id'], user[u'name'], roles.CAPACITY_MEMBER)
+        _assign(world.grant_a[u'id'], user[u'name'], roles.CAPACITY_EDITOR)
+        roles.clear_cache()
+
+        listed = _as(world.admin_a[u'name'], u'nfwf_user_list')
+
+        assert user[u'name'] in {r[u'name'] for r in listed[u'results']}

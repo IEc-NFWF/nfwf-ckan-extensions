@@ -8,13 +8,33 @@ has to decide about rather than a rule.
 Kept separate from ``cli.py`` so the analysis is testable without invoking a
 command, and so nothing here can write: every function below only reads.
 
-**The migration writes almost nothing, and that is the main finding.** The new
-role model was chosen to map onto capacities CKAN already stores -- Grant Editor
-*is* a grant ``editor`` row, Program Reader *is* a program ``member`` row,
-Program Administrator *is* a program ``admin`` row -- so the vast majority of
-assignments need no change at all. What the report is really for is the residue:
-rows expressing a capacity the model retires, and accounts whose combination of
-assignments the rules cannot resolve on their own.
+**The migration is low-risk but it is not small, and an earlier version of this
+docstring got that backwards.** It claimed the migration "writes almost nothing"
+and that "the vast majority of assignments need no change at all". Run against
+the production data, only a small minority of rows are ``keep``; the other two
+dispositions are the bulk of it. The claim was reasoning from the design rather
+than from the data, which is how it survived.
+
+The design half is true and is why the model was chosen: it maps onto capacities
+CKAN already stores -- Grant Editor *is* a grant ``editor`` row, Program Reader
+*is* a program ``member`` row, Program Administrator *is* a program ``admin``
+row. No row has to be rewritten into a new shape.
+
+What the data adds is where the volume actually sits, and the two halves have
+very different weights:
+
+* Most ``drop`` rows belong to a **handful of shared service accounts** -- the
+  ones the redesign's pain points are about -- carrying retired grant ``admin``
+  capacities. That is why the migration is low-risk: those accounts are already
+  Platform Administrators, so removing the rows changes nothing they can do.
+  It is still a lot of rows, and ``--apply`` really does delete them.
+* Most ``decide`` rows belong to **accounts holding both a program and a grant
+  assignment**, which one-role-per-user cannot resolve on its own. This is the
+  real cost of the migration and it is measured in people, not rows: each one
+  is somebody who has to be asked which side they keep.
+
+Run the command for the current numbers rather than trusting any figure written
+down here.
 
 Three dispositions, per assignment:
 
