@@ -526,3 +526,79 @@ class TestGroupToGroupMembershipIsRefused(object):
             u'member_create', context={u'user': world.user[u'name']},
             id=child[u'id'], object=parent[u'id'],
             object_type=u'group', capacity=u'parent')
+
+
+def _auth0_style_user(name=u'someone@example.gov'):
+    """An account shaped the way the real ones are, written past the validators.
+
+    Every account on the production site is created by ``ckanext-oauth2`` from
+    Auth0 and named after the person's email address. ``factories.User()``
+    cannot produce one -- it goes through ``user_create``, whose
+    ``name_validator`` rejects ``@`` and ``.`` -- which is exactly why a suite
+    of several hundred tests ran for weeks against names that resemble no real
+    account, and why the status actions were broken for all but one of them
+    without anything failing.
+    """
+    user = model.User(name=name, email=name)
+    user.state = u'active'
+    model.Session.add(user)
+    model.Session.commit()
+    return model.User.get(name)
+
+
+@pytest.mark.usefixtures(u'clean_db', u'with_plugins')
+class TestLegacyUsernames(object):
+    """CKAN's ``name_validator`` rejects the usernames this site actually has.
+
+    It runs on every update, because ``user_patch`` merges over ``user_show``
+    and that always carries ``name`` -- omitting it or passing ``ignore_auth``
+    makes no difference, both were probed. So ``accounts.patch`` relaxes the
+    format checks for a field it only ever writes back unchanged.
+    """
+
+    def test_every_status_is_reachable_on_an_email_named_account(self):
+        sysadmin = factories.Sysadmin()
+        user = _auth0_style_user()
+        ctx = {u'user': sysadmin[u'name']}
+
+        for status in roles.STATUSES:
+            accounts.set_status(ctx, model.User.get(user.id), status)
+
+            assert accounts.status_of(model.User.get(user.id)) == status, status
+
+    def test_the_name_itself_is_never_altered(self):
+        """The relaxation must not become a way to rewrite names."""
+        sysadmin = factories.Sysadmin()
+        user = _auth0_style_user()
+
+        accounts.set_status({u'user': sysadmin[u'name']},
+                            model.User.get(user.id), roles.STATUS_DEACTIVATED)
+
+        assert model.User.get(user.id).name == u'someone@example.gov'
+
+    def test_the_actions_work_end_to_end(self):
+        """Through the API, not just the helper -- this is what Task 117's
+        screen calls, and what was failing for every real account."""
+        sysadmin = factories.Sysadmin()
+        user = _auth0_style_user(u'another.person@example.gov')
+
+        result = helpers.call_action(
+            u'nfwf_user_deactivate',
+            context={u'user': sysadmin[u'name'], u'ignore_auth': False},
+            id=user.name)
+
+        assert result[u'status'] == roles.STATUS_DEACTIVATED
+        assert model.User.get(user.id).name == u'another.person@example.gov'
+
+    def test_renaming_still_goes_through_stock_validation(self):
+        """Only `accounts.patch` relaxes this. A genuine rename is unaffected,
+        so the relaxation cannot be reached as a way past `name_validator`."""
+        sysadmin = factories.Sysadmin()
+        user = factories.User()
+
+        with pytest.raises(toolkit.ValidationError):
+            helpers.call_action(
+                u'user_update',
+                context={u'user': sysadmin[u'name'], u'ignore_auth': False},
+                id=user[u'id'], name=u'not a valid name!',
+                email=user[u'email'])

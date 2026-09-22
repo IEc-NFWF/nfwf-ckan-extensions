@@ -20,6 +20,7 @@ against -- can be tested without going through authorization.
 from sqlalchemy import or_
 
 from ckan import model
+from ckan.logic import schema as core_schema
 from ckan.plugins import toolkit
 
 from ckanext.nfwf_permissions import roles
@@ -125,15 +126,45 @@ def patch(context, user, **fields):
     ``user_update`` with no email and fails its ``not_empty`` validator. Naming
     the fields here makes the call work regardless of who is asking, which
     matters because internal callers arrive as ``127.0.0.1``.
+
+    **The relaxed ``name`` validation is what makes this work on the real
+    data.** Accounts here are created by ``ckanext-oauth2`` from Auth0 and are
+    named after the person's email address -- ``someone@example.gov``. CKAN's
+    ``name_validator`` accepts only ``[a-z0-9_-]``, so it rejects very nearly
+    every account on the site, and it runs on *every* update: the merge above
+    means ``name`` is always present whether or not it is passed here. Without
+    the schema below, approving, rejecting or deactivating a real account fails
+    with "Must be purely lowercase alphanumeric (ascii) characters and these
+    symbols: -_" and nothing is written.
+
+    That is CKAN's behaviour on legacy data rather than anything this extension
+    introduced -- ``user_patch`` fails identically when ``name`` is omitted and
+    when ``ignore_auth`` is passed -- but it fails *here*, so it is fixed here.
+    It went unnoticed because ``check_access`` runs before validation and
+    ``ckanext-oauth2`` used to refuse ``user_update`` outright, which preempted
+    it; and because nobody manages accounts on a site with one shared
+    administrator, which is the pain point this task exists to remove.
+
+    Only the format checks are dropped, and only for a field no caller here
+    ever changes -- ``name`` is passed solely to survive the merge, always as
+    the value already stored. Renaming a user still goes through stock
+    ``user_update`` with stock validation. ``user_name_validator`` (uniqueness)
+    goes too, for the same reason: a name being written back unchanged cannot
+    collide with anything but itself.
     """
     fields.setdefault(u'name', user.name)
     fields.setdefault(u'email', user.email)
     fields[u'id'] = user.id
 
+    schema = core_schema.default_update_user_schema()
+    schema[u'name'] = [toolkit.get_validator(u'ignore_missing'),
+                       toolkit.get_validator(u'unicode_safe')]
+
     toolkit.get_action(u'user_patch')(
         {u'user': context.get(u'user'),
          u'auth_user_obj': context.get(u'auth_user_obj'),
-         u'ignore_auth': context.get(u'ignore_auth', False)},
+         u'ignore_auth': context.get(u'ignore_auth', False),
+         u'schema': schema},
         fields)
 
 
