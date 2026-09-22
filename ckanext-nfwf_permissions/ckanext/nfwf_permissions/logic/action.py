@@ -971,16 +971,38 @@ def organization_list_for_user(original_action, context, data_dict):
     Capacity is reported as ``admin`` because that is what the permission
     matrix actually grants them over these grants -- organization_update and
     _delete, member_create, package_create and _update, dataset_purge. The
-    requested ``permission`` is deliberately not consulted for the same
-    reason: ``admin`` satisfies every permission check in CKAN
-    (``ckan/authz.py:357-358``), so any permission stock might be asked about
-    is one they hold here.
+    requested ``permission`` is otherwise not consulted, because ``admin``
+    satisfies every permission check in CKAN (``ckan/authz.py:357-358``), so
+    any permission stock might ask about is one they hold here.
+
+    **``read`` is the one exception, and it is about cost, not entitlement.**
+    ``DefaultPermissionLabels.get_user_dataset_labels`` builds its
+    ``member-<org id>`` labels by calling this action with ``permission='read'``
+    (``ckan/lib/plugins.py``), so augmenting that call put one label on the user
+    for every grant in their programs. Measured on the production snapshot: a
+    Program Administrator of one program carried **494** permission labels, 488
+    of them ``member-``, against a single real membership row. Every one of those
+    is dead weight -- ``labels.py`` already gives the same user ``program-<id>``
+    and ``in-any-program``, which match exactly the datasets those labels would
+    have matched -- and they become a Solr filter query of ~494 OR'd terms on
+    every search they run, growing with the grant count.
+
+    Nothing that needs the augmentation asks for ``read``. Every Grant selector
+    -- core's ``package_basic_fields.html`` and both the ``nfwf_fields`` and
+    ``nfwf_theme`` overrides -- calls ``h.organizations_available(
+    'create_dataset')``, and the organizations dashboard asks for
+    ``manage_group``. Checked, not assumed.
 
     Sysadmins need no special case: stock already returns every organization
     for them, so the set difference below is empty and nothing is added.
     """
     orgs = original_action(context, data_dict)
     data_dict = data_dict or {}
+
+    # See the docstring: this call is the permission-label builder, and
+    # `labels.py` already covers those datasets by another route.
+    if data_dict.get(u'permission') == u'read':
+        return orgs
 
     subject = data_dict.get(u'id') or context.get(u'user')
     administered = roles.programs_for_user(subject, [roles.CAPACITY_ADMIN])

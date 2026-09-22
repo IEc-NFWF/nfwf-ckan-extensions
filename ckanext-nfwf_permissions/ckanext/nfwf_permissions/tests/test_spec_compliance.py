@@ -527,3 +527,56 @@ class TestDualScopeAccountsAreOutOfReach(object):
         listed = _as(world.admin_a[u'name'], u'nfwf_user_list')
 
         assert user[u'name'] in {r[u'name'] for r in listed[u'results']}
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestPermissionLabelsDoNotBloat(object):
+    """The chained `organization_list_for_user` must not inflate the label set.
+
+    CKAN builds `member-<org id>` labels by calling that action with
+    `permission='read'`, so augmenting it put one label on a Program
+    Administrator for every grant in their programs. On the production snapshot
+    that was 494 labels, 488 of them `member-`, against a single real
+    membership row -- and it becomes a Solr filter query of that many OR'd
+    terms on every search they run.
+
+    They were pure dead weight: `labels.py` gives the same user `program-<id>`
+    and `in-any-program`, which match exactly the same datasets.
+    """
+
+    def test_read_does_not_get_the_extra_grants(self, world):
+        from ckanext.nfwf_permissions import labels
+
+        held = roles.grants_for_user(world.admin_a[u'name'])
+        user = model.User.get(world.admin_a[u'id'])
+        got = labels.NfwfPermissionLabels().get_user_dataset_labels(user)
+        member = [l for l in got if l.startswith(u'member-')]
+
+        assert len(member) == len(held)
+
+    def test_but_the_form_still_gets_them(self, world):
+        """The reason the augmentation exists at all: without this the Grant
+        selector renders empty and a Program Administrator cannot create a
+        dataset. Every selector asks for `create_dataset`."""
+        orgs = _as(world.admin_a[u'name'], u'organization_list_for_user',
+                   permission=u'create_dataset')
+
+        assert world.grant_a[u'id'] in {o[u'id'] for o in orgs}
+
+    def test_and_the_access_those_labels_carried_is_unchanged(self, world):
+        """What matters is reach, not which label provides it."""
+        from ckanext.nfwf_permissions import labels
+
+        private = factories.Dataset(owner_org=world.grant_a[u'id'],
+                                    private=True)
+        pkg = model.Package.get(private[u'id'])
+        roles.clear_cache()
+
+        on_dataset = set(
+            labels.NfwfPermissionLabels().get_dataset_labels(pkg))
+        on_user = set(labels.NfwfPermissionLabels().get_user_dataset_labels(
+            model.User.get(world.admin_a[u'id'])))
+
+        assert on_dataset & on_user, (
+            u'the Program Administrator lost sight of a private dataset in '
+            u'their own program')
