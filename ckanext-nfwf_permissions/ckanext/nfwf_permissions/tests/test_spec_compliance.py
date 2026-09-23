@@ -580,3 +580,69 @@ class TestPermissionLabelsDoNotBloat(object):
         assert on_dataset & on_user, (
             u'the Program Administrator lost sight of a private dataset in '
             u'their own program')
+
+
+@pytest.mark.ckan_config(u'ckan.auth.public_user_details', u'false')
+@pytest.mark.usefixtures(u'with_plugins')
+class TestSeeingWhoIsAssigned(object):
+    """A Program Administrator must be able to read a grant's member list.
+
+    **Pinned to the deployment's config, and the whole finding depends on it.**
+    CKAN's `test-core.ini` leaves `ckan.auth.public_user_details` at ``true``,
+    which makes stock `group_show` return success early for everyone -- member
+    lists open to the world, nothing to deny, and the negative tests below
+    silently vacuous. This site sets it ``false`` (verified on the running
+    container), which is what exposes the gap in the first place. Without this
+    marker the suite would have agreed the code was fine while the real site
+    returned 403.
+
+    Found by rendering the pages, not by reading code: the Members tab of a
+    grant returned 403 while the Add Member page beside it returned 200. They
+    could assign a Grant Editor but not see who was already assigned.
+
+    The check that refused is inside the `member_list` *action*, not its auth
+    function -- `check_access('member_list')` passes, then the action calls
+    `group_show` with `object_type='user'`, which skips stock's permissive
+    early return and falls through to a membership check the role model
+    deliberately does not give them.
+
+    Driven through the action here for that reason; a `check_access` test would
+    have passed against the broken code.
+    """
+
+    def test_they_can_read_a_grant_in_their_program(self, world):
+        result = _as(world.admin_a[u'name'], u'member_list',
+                     id=world.grant_a[u'id'], object_type=u'user')
+
+        assert isinstance(result, list)
+
+    def test_they_cannot_read_a_grant_in_another_program(self, world):
+        with pytest.raises(toolkit.NotAuthorized):
+            _as(world.admin_a[u'name'], u'member_list',
+                id=world.grant_b[u'id'], object_type=u'user')
+
+    def test_their_own_program_still_works(self, world):
+        """This path was never broken -- they hold an admin row on the program
+        itself, so stock's membership check already passed. Guarding it so the
+        new branch cannot quietly take it over."""
+        result = _as(world.admin_a[u'name'], u'member_list',
+                     id=world.program_a[u'id'], object_type=u'user')
+
+        assert isinstance(result, list)
+
+    def test_a_program_reader_is_not_let_in(self, world):
+        """The widening must reach exactly one role."""
+        with pytest.raises(toolkit.NotAuthorized):
+            _as(world.reader_a[u'name'], u'member_list',
+                id=world.grant_a[u'id'], object_type=u'user')
+
+    def test_the_ordinary_group_page_is_unaffected(self, world):
+        """Stock `group_show` is permissive when the caller is not asking about
+        users, and that must stay true for everyone -- the override only ever
+        adds."""
+        result = helpers.call_action(
+            u'organization_show',
+            context={u'user': world.newcomer[u'name'], u'ignore_auth': False},
+            id=world.grant_b[u'id'])
+
+        assert result[u'id'] == world.grant_b[u'id']

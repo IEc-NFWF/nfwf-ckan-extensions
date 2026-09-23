@@ -76,6 +76,7 @@ lives in the chained membership actions instead.
 from ckan.logic import auth as core
 from ckan.logic.auth import create as core_create
 from ckan.logic.auth import delete as core_delete
+from ckan.logic.auth import get as core_get
 from ckan.logic.auth import update as core_update
 from ckan.plugins import toolkit
 
@@ -98,6 +99,7 @@ __all__ = [
     u'organization_delete',
     u'member_create',
     u'organization_member_create',
+    u'group_show',
     u'dataset_purge',
     u'user_list',
     u'user_autocomplete',
@@ -348,6 +350,54 @@ def member_create(context, data_dict):
     return _denied(toolkit._(
         u"Only a Platform Administrator or this program's Program "
         u"Administrator may change what belongs to it."))
+
+
+def group_show(context, data_dict=None):
+    """Let a Program Administrator see who is assigned to what.
+
+    Narrow in intent, broad in reach, so read the whole of this before changing
+    it. Stock ``group_show`` is permissive -- an active group is visible to
+    anyone -- **except** when the caller asks about its users:
+
+        if group.state == 'active':
+            if config.get('ckan.auth.public_user_details') or \\
+                (not asbool(data_dict.get('include_users', False)) and
+                    (data_dict.get('object_type', None) != 'user')):
+                return {'success': True}
+        authorized = authz.has_user_permission_for_group_or_org(
+            group.id, user, 'read')
+
+    ``member_list`` calls it with ``object_type='user'``
+    (``ckan/logic/action/get.py:178``), which skips that early return and falls
+    through to a membership check -- and a Program Administrator holds no row on
+    the grants they administer, by design. ``public_user_details`` is ``False``
+    here, so nothing rescues it.
+
+    The symptom, found by rendering the pages rather than by reading: a Program
+    Administrator got **403 on a grant's Members tab while the Add Member page
+    beside it returned 200**. They could assign a Grant Editor but not see who
+    was already assigned, which is not a coherent version of the document's
+    "assign user permissions for their program-associated grants".
+
+    Only the grant branch is new. A program's Members tab already worked,
+    because they *do* hold an ``admin`` row on the program itself and the
+    membership check passes -- so this deliberately does not touch that path.
+
+    This only ever *adds* permission; every caller it does not recognise falls
+    through to stock. ``organization_show`` defers here
+    (``ckan/logic/auth/get.py:174-175``), so the same widening applies to it,
+    which is intended: the two describe the same object.
+    """
+    group = core.get_group_object(context, data_dict)
+    caller = _caller(context)
+
+    if group.is_organization:
+        if roles.is_program_admin_for_grant(caller, group.id):
+            return _allowed()
+    elif group.id in roles.programs_for_user(caller, [roles.CAPACITY_ADMIN]):
+        return _allowed()
+
+    return core_get.group_show(context, data_dict)
 
 
 def organization_member_create(context, data_dict):
