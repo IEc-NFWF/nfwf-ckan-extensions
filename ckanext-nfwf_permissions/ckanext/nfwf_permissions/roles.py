@@ -490,6 +490,31 @@ def grants_for_user(user, capacities=None):
     )
 
 
+def holds_both_scopes(user):
+    """Does ``user`` hold a program assignment *and* a grant assignment?
+
+    The state one-role-per-user forbids, which most accounts were already in
+    when the rule arrived -- the guards refuse new combinations but nothing
+    rewrote the existing data, and ``ckan nfwf-permissions migrate-roles``
+    reports how many are left.
+
+    It matters to anything that *displays* a role, because ``user_role``
+    resolves by precedence and so names only one of the two. An account holding
+    a program ``member`` row and a grant ``editor`` row reports as Program
+    Reader/Member -- the read-only role -- while holding a Grant Editor's write
+    permissions. A screen showing the role alone understates what the account
+    can do, which is the wrong direction for an administrative table to be
+    wrong in.
+
+    Raw, and deliberately the same question ``migration`` asks, so the user
+    table and the migration report cannot disagree about which accounts are
+    affected. It says nothing about whether those assignments are *consulted*:
+    a Platform Administrator's are retained and superseded, so pair this with
+    ``role`` or ``assignments_in_effect`` before warning anybody.
+    """
+    return bool(programs_for_user(user)) and bool(grants_for_user(user))
+
+
 def assignments_for_user(user, is_organization):
     """``((group_id, capacity), ...)`` -- what they hold, capacities included.
 

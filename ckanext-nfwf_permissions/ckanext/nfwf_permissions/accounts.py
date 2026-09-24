@@ -215,6 +215,19 @@ def user_record(user):
     A Platform Administrator's programs and grants are still reported, because
     they are retained rather than deleted -- ``assignments_in_effect`` on
     ``role_record`` is what tells the UI to render the cell blank.
+
+    ``dual_scope`` says the account holds both a program and a grant
+    assignment, which one-role-per-user forbids and most of the existing data
+    does anyway. It is here because ``role`` alone is misleading for those
+    accounts: ``user_role`` resolves by precedence, so one holding a program
+    ``member`` row and a grant ``editor`` row reports as Program Reader/Member
+    while holding a Grant Editor's write permissions. The table should say so
+    rather than show a read-only label beside an account that can write.
+
+    Pair it with ``role`` before warning: a Platform Administrator's
+    assignments are retained but never consulted, so ``dual_scope`` may be true
+    for them without meaning anything. Same question the migration report asks,
+    so the two cannot disagree about which accounts are affected.
     """
     role = roles.user_role(user)
     status = status_of(user)
@@ -228,13 +241,20 @@ def user_record(user):
         u'last_login': _iso(user.last_active),
         u'role': role,
         u'role_label': roles.role_label(role),
+        u'dual_scope': roles.holds_both_scopes(user),
         u'programs': _groups_by_id(roles.programs_for_user(user)),
         u'grants': _groups_by_id(roles.grants_for_user(user)),
     }
 
 
 def role_record(user):
-    """What the Manage Roles modal needs for one user."""
+    """What the Manage Roles modal needs for one user.
+
+    Carries ``dual_scope`` for the same reason ``user_record`` does, and it
+    matters more here: the modal is where somebody resolves one. Saving
+    replaces every assignment, so a modal that showed only the role name would
+    silently drop the other half the moment anyone pressed Save.
+    """
     role = roles.user_role(user)
     return {
         u'user_id': user.id,
@@ -242,6 +262,7 @@ def role_record(user):
         u'display_name': user.display_name,
         u'role': role,
         u'role_label': roles.role_label(role),
+        u'dual_scope': roles.holds_both_scopes(user),
         u'programs': _groups_by_id(roles.programs_for_user(user)),
         u'grants': _groups_by_id(roles.grants_for_user(user)),
         u'assignments_in_effect': roles.assignments_in_effect(role),

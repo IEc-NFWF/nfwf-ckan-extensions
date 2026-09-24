@@ -181,6 +181,7 @@ Lists accept either a real JSON array or a comma-separated string.
       "last_login": "2026-04-07T11:00:00",
       "role": "grant_editor",
       "role_label": "Grant Editor",
+      "dual_scope": false,
       "programs": [],
       "grants": [
         { "id": "fixture-grant-10001",
@@ -204,8 +205,27 @@ Mockup column → response field:
 | Email | `email` |
 | Status | `status_label` (colour off `status`) |
 | Last Login | `last_login` |
-| Role | `role_label` |
+| Role | `role_label` — flag the row when `dual_scope` is true, see below |
 | Assigned Grants | `grants[].title`, as a bulleted list |
+
+**`dual_scope` means the role shown is not the whole story.** The account holds
+both a program and a grant assignment, which one-role-per-user forbids and most
+of the existing data does anyway — `ckan nfwf-permissions migrate-roles` counts
+them, and it asks the same question this field answers, so the two cannot
+disagree.
+
+It matters because `role` is resolved by precedence and names only one of the
+two. An account holding a program `member` row and a grant `editor` row reports
+as **Program Reader/Member** — the read-only role — while holding a Grant
+Editor's write permissions. Showing that label unqualified tells an
+administrator the account is read-only when it is not, which is the wrong
+direction for this table to be wrong in.
+
+Surfaced rather than resolved in code: changing the precedence would just pick
+a different wrong answer, and which side such an account keeps is a decision
+for a Platform Administrator. Pair it with `role` before warning — a Platform
+Administrator's assignments are retained but never consulted, so `dual_scope`
+can be true for them without meaning anything.
 
 `last_login` is ISO 8601; the mockup's `5/21/2025 11:00 am` is the UI's
 formatting job. `last_login`, `role` and `role_label` are `null` when unset —
@@ -271,6 +291,7 @@ rather than adding to it.
   "display_name": "Sample Editor",
   "role": "program_reader",
   "role_label": "Program Reader/Member",
+  "dual_scope": false,
   "programs": [ { "id": "...", "name": "...", "title": "..." } ],
   "grants": [],
   "assignments_in_effect": true,

@@ -460,11 +460,12 @@ class TestAuthorization(object):
 
 USER_ROW = {
     u'id', u'name', u'display_name', u'email', u'status', u'status_label',
-    u'last_login', u'role', u'role_label', u'programs', u'grants',
+    u'last_login', u'role', u'role_label', u'dual_scope', u'programs',
+    u'grants',
 }
 ROLE_RECORD = {
     u'user_id', u'user_name', u'display_name', u'role', u'role_label',
-    u'programs', u'grants', u'assignments_in_effect',
+    u'dual_scope', u'programs', u'grants', u'assignments_in_effect',
 }
 LIST_ENVELOPE = {u'count', u'limit', u'offset', u'results'}
 ROLE_OPTION = {u'value', u'label', u'assigned_to'}
@@ -551,3 +552,67 @@ class TestResponseShapesAreFrozen(object):
         assert [option[u'value'] for option in result[u'roles']] == [
             u'platform_admin', u'program_admin', u'program_reader',
             u'grant_editor']
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestDualScopeIsVisible(object):
+    """`role` alone understates what a dual-scope account can do.
+
+    `user_role` resolves by precedence, and ROLES puts PROGRAM_READER ahead of
+    GRANT_EDITOR, so an account holding a program `member` row and a grant
+    `editor` row reports as the read-only role while holding write permissions.
+    Found on the production snapshot, where most accounts are in this state
+    because one-role-per-user postdates the data.
+
+    Surfaced rather than resolved by changing the precedence: picking the other
+    role would be a different wrong answer. The screen gets told, and a human
+    decides.
+    """
+
+    def test_a_dual_scope_account_is_flagged(self, population):
+        _assign(population.program_a[u'id'], population.editor[u'name'],
+                roles.CAPACITY_MEMBER)
+        roles.clear_cache()
+
+        record = helpers.call_action(
+            u'nfwf_user_role_show', id=population.editor[u'name'])
+
+        assert record[u'dual_scope'] is True
+
+    def test_the_reported_role_really_does_understate_it(self, population):
+        """The reason the flag exists, stated as a test rather than a comment:
+        the account reads as read-only and holds write permissions."""
+        _assign(population.program_a[u'id'], population.editor[u'name'],
+                roles.CAPACITY_MEMBER)
+        roles.clear_cache()
+
+        record = helpers.call_action(
+            u'nfwf_user_role_show', id=population.editor[u'name'])
+
+        assert record[u'role'] == roles.PROGRAM_READER
+        assert record[u'grants'], u'still holds the grant it can write in'
+
+    def test_a_single_scope_account_is_not_flagged(self, population):
+        record = helpers.call_action(
+            u'nfwf_user_role_show', id=population.editor[u'name'])
+
+        assert record[u'dual_scope'] is False
+
+    def test_the_table_row_carries_it_too(self, population):
+        """Task 117 reads the row; Task 126 reads the record. Both need it."""
+        rows = helpers.call_action(u'nfwf_user_list')[u'results']
+
+        assert all(u'dual_scope' in row for row in rows)
+
+    def test_it_asks_the_same_question_the_migration_does(self, population):
+        """One definition, so the user table and `migrate-roles` cannot
+        disagree about which accounts are affected."""
+        _assign(population.program_a[u'id'], population.editor[u'name'],
+                roles.CAPACITY_MEMBER)
+        roles.clear_cache()
+
+        record = helpers.call_action(
+            u'nfwf_user_role_show', id=population.editor[u'name'])
+
+        assert record[u'dual_scope'] == roles.holds_both_scopes(
+            population.editor[u'name'])
