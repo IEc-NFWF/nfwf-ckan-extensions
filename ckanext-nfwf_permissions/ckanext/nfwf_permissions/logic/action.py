@@ -245,6 +245,14 @@ def nfwf_user_role_set(context, data_dict):
     _check_assignment_scope(role, program_ids, grant_ids)
 
     user = _user_or_404(data[u'id'])
+
+    # Same lock as the membership guard, for the same reason and one layer up:
+    # this path reaches the member actions with `ignore_auth`, so the guard
+    # returns early and cannot take it. Two concurrent saves each replace every
+    # assignment, so without this they interleave into an account holding both
+    # scopes -- which is neither caller's intent. See `_lock_account`.
+    _lock_account(user)
+
     scope = _callers_scope(context)
     _assert_within_scope(scope, user)
     if role != roles.PLATFORM_ADMIN:
@@ -828,6 +836,28 @@ def _reindex_if_program_changed(organization, before):
 # (ckan/logic/action/create.py:773-784). Refusing retired capacities without
 # that exemption would make it impossible to create a grant at all.
 
+def _lock_account(user):
+    """Serialise concurrent role changes to one account.
+
+    ``_assert_membership_is_allowed`` reads what the account already holds and
+    the action then writes, with nothing in between. Two requests arriving
+    together each read "holds nothing" and each proceed, and one-role-per-user
+    -- a conflict-of-interest control, not a tidiness rule -- is defeated by
+    two administrators clicking at the same moment. Demonstrated with a barrier
+    between the check and the write: both calls succeeded and the account ended
+    up holding a program row and a grant row.
+
+    A row lock on the account is the smallest thing that closes it. Only one
+    row is ever locked, so there is no ordering to get wrong and no deadlock to
+    construct, and membership writes are rare enough that contention is not a
+    concern. ``ignore_auth`` callers skip the guard entirely and so never reach
+    this, which is what keeps ``_replace_memberships`` from locking against
+    itself.
+    """
+    model.Session.query(model.User).filter(
+        model.User.id == user.id).with_for_update().first()
+
+
 def _assert_membership_is_allowed(context, group_ref, user_ref, capacity):
     """Refuse a membership that would break the role model.
 
@@ -858,6 +888,10 @@ def _assert_membership_is_allowed(context, group_ref, user_ref, capacity):
     user = model.User.get(user_ref)
     if user is None:
         return
+
+    # Before reading what they hold, not after: the point is that nobody else
+    # can write between the read below and this action's commit.
+    _lock_account(user)
 
     if group.is_organization:
         if capacity in roles.RETIRED_GRANT_CAPACITIES:

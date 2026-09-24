@@ -6,6 +6,8 @@ cover the two things item 4 added underneath that the contract does not reach:
 the four-statuses-onto-three-states mapping, and the guards that stop the role
 model being broken by the stock Members screens or a direct API call.
 """
+import threading
+
 import pytest
 
 import ckan.tests.factories as factories
@@ -14,6 +16,7 @@ from ckan import authz, model
 from ckan.plugins import toolkit
 
 from ckanext.nfwf_permissions import accounts, roles
+from ckanext.nfwf_permissions.logic import action
 
 
 def _assign(group_id, user_name, capacity):
@@ -602,3 +605,118 @@ class TestLegacyUsernames(object):
                 context={u'user': sysadmin[u'name'], u'ignore_auth': False},
                 id=user[u'id'], name=u'not a valid name!',
                 email=user[u'email'])
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestOneRolePerUserUnderConcurrency(object):
+    """One role per user is a conflict-of-interest control, so it has to hold
+    when two administrators act at the same moment, not only when they take
+    turns.
+
+    It did not. `_assert_membership_is_allowed` reads what the account holds
+    and the action then writes, with nothing in between; two requests each read
+    "holds nothing" and each proceeded. The modal had the same hole one layer
+    up, because it reaches the member actions with `ignore_auth` and so skips
+    the guard entirely -- and there it was worse, since every save *replaces*
+    the assignments, so interleaving produced a combination neither caller
+    asked for.
+
+    The barriers below do not invent a race. They force an interleaving the
+    code permits, which is how you show a check-then-act window without
+    relying on timing luck. `_lock_account` is what closes it.
+    """
+
+    @staticmethod
+    def _run_together(first, second):
+        threads = [threading.Thread(target=first),
+                   threading.Thread(target=second)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+        model.Session.remove()
+        roles.clear_cache()
+
+    def test_two_membership_writes_cannot_both_land(self, world,
+                                                    monkeypatch):
+        barrier = threading.Barrier(2, timeout=20)
+        original = action._assert_membership_is_allowed
+
+        def checked_then_paused(context, group_ref, user_ref, capacity):
+            original(context, group_ref, user_ref, capacity)
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                pass
+
+        monkeypatch.setattr(
+            action, u'_assert_membership_is_allowed', checked_then_paused)
+        outcomes = {}
+
+        def add(key, action_name, **kwargs):
+            def go():
+                try:
+                    _as(world.sysadmin[u'name'], action_name,
+                        username=world.user[u'name'], **kwargs)
+                    outcomes[key] = None
+                except Exception as exc:
+                    outcomes[key] = type(exc).__name__
+                finally:
+                    model.Session.remove()
+            return go
+
+        self._run_together(
+            add(u'grant', u'organization_member_create',
+                id=world.grant[u'id'], role=roles.CAPACITY_EDITOR),
+            add(u'program', u'group_member_create',
+                id=world.program[u'id'], role=roles.CAPACITY_MEMBER))
+
+        assert not roles.holds_both_scopes(world.user[u'name']), (
+            u'both writes landed and the account now holds both scopes')
+        assert u'ValidationError' in set(
+            v for v in outcomes.values() if v), outcomes
+
+    def test_two_role_changes_leave_one_coherent_role(self, world,
+                                                      monkeypatch):
+        """The modal path. Both callers may succeed -- each replaces the lot,
+        so last-writer-wins is the right answer -- but the account must end up
+        in one of the two states they asked for, not a mixture of both."""
+        barrier = threading.Barrier(2, timeout=20)
+        original = action._apply_role
+
+        def paused_then_applied(context, user, role, programs, grants):
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                pass
+            return original(context, user, role, programs, grants)
+
+        monkeypatch.setattr(action, u'_apply_role', paused_then_applied)
+
+        # CKAN builds its auth registry lazily and not thread-safely; in a
+        # running site the first request has already done it.
+        try:
+            toolkit.check_access(u'nfwf_user_role_set',
+                                 {u'user': world.sysadmin[u'name']}, {})
+        except Exception:
+            pass
+
+        def set_role(**kwargs):
+            def go():
+                try:
+                    _as(world.sysadmin[u'name'], u'nfwf_user_role_set',
+                        id=world.user[u'name'], **kwargs)
+                except Exception:
+                    pass
+                finally:
+                    model.Session.remove()
+            return go
+
+        self._run_together(
+            set_role(role=roles.GRANT_EDITOR, grant_ids=[world.grant[u'id']]),
+            set_role(role=roles.PROGRAM_READER,
+                     program_ids=[world.program[u'id']]))
+
+        assert not roles.holds_both_scopes(world.user[u'name'])
+        assert roles.user_role(world.user[u'name']) in (
+            roles.GRANT_EDITOR, roles.PROGRAM_READER)
