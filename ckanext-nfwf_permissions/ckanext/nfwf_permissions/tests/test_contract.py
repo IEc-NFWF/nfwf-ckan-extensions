@@ -446,3 +446,108 @@ class TestAuthorization(object):
             context={u'user': population.sysadmin[u'name'],
                      u'ignore_auth': False},
             id=population.editor[u'name'], role=roles.PLATFORM_ADMIN)
+
+
+# -- The frozen response shapes ----------------------------------------------
+#
+# Tasks 117 and 126 build against these. The behaviour tests above check what
+# the actions *do*; these check what they *return*, exactly, so a key cannot be
+# added, renamed or dropped without a deliberate change here and a conversation
+# with whoever is building the screens.
+#
+# `issubset` was not enough: it passes when a key disappears, which is the
+# change most likely to break a UI silently.
+
+USER_ROW = {
+    u'id', u'name', u'display_name', u'email', u'status', u'status_label',
+    u'last_login', u'role', u'role_label', u'programs', u'grants',
+}
+ROLE_RECORD = {
+    u'user_id', u'user_name', u'display_name', u'role', u'role_label',
+    u'programs', u'grants', u'assignments_in_effect',
+}
+LIST_ENVELOPE = {u'count', u'limit', u'offset', u'results'}
+ROLE_OPTION = {u'value', u'label', u'assigned_to'}
+OPTIONS_ENVELOPE = {u'roles', u'programs'}
+PROGRAM_RECORD = {u'id', u'name', u'title'}
+GRANT_RECORD = {u'id', u'name', u'title', u'program_id'}
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestResponseShapesAreFrozen(object):
+    """Exact keys, not a subset. See the note above."""
+
+    def test_user_list_envelope(self, population):
+        result = helpers.call_action(u'nfwf_user_list')
+
+        assert set(result) == LIST_ENVELOPE
+
+    def test_user_list_row(self, population):
+        result = helpers.call_action(u'nfwf_user_list')
+
+        assert result[u'results'], u'fixture produced no rows to check'
+        for row in result[u'results']:
+            assert set(row) == USER_ROW, row.get(u'name')
+
+    def test_a_grant_in_a_row_names_its_program(self, population):
+        """`program_id` is what lets the table group grants by program, and it
+        is the one key that distinguishes a grant record from a program one."""
+        rows = helpers.call_action(u'nfwf_user_list')[u'results']
+        grants = [g for row in rows for g in row[u'grants']]
+
+        assert grants, u'fixture produced no grant assignments to check'
+        for grant in grants:
+            assert set(grant) == GRANT_RECORD
+
+    def test_programs_in_a_row_carry_no_program_id(self, population):
+        rows = helpers.call_action(u'nfwf_user_list')[u'results']
+        programs = [p for row in rows for p in row[u'programs']]
+
+        assert programs, u'fixture produced no program assignments to check'
+        for program in programs:
+            assert set(program) == PROGRAM_RECORD
+
+    def test_role_show_record(self, population):
+        result = helpers.call_action(
+            u'nfwf_user_role_show', id=population.editor[u'name'])
+
+        assert set(result) == ROLE_RECORD
+
+    def test_role_set_returns_the_same_record(self, population):
+        """The modal reads one shape and writes the same one back. If these
+        ever diverge it has to learn two."""
+        shown = helpers.call_action(
+            u'nfwf_user_role_show', id=population.editor[u'name'])
+        saved = helpers.call_action(
+            u'nfwf_user_role_set', id=population.editor[u'name'],
+            role=roles.GRANT_EDITOR,
+            grant_ids=[shown[u'grants'][0][u'id']])
+
+        assert set(saved) == set(shown) == ROLE_RECORD
+
+    def test_role_options_envelope(self, population):
+        result = helpers.call_action(u'nfwf_role_options')
+
+        assert set(result) == OPTIONS_ENVELOPE
+        for option in result[u'roles']:
+            assert set(option) == ROLE_OPTION
+        for program in result[u'programs']:
+            assert set(program) == PROGRAM_RECORD
+
+    @pytest.mark.parametrize(u'action', [
+        u'nfwf_user_approve', u'nfwf_user_reject', u'nfwf_user_deactivate'])
+    def test_the_status_actions_return_a_table_row(self, action, population):
+        """They return exactly what the table renders, so the screen can
+        replace the row in place instead of refetching the page."""
+        result = helpers.call_action(action, id=population.pending[u'name'])
+
+        assert set(result) == USER_ROW
+
+    def test_the_role_vocabulary_is_the_documented_one(self, population):
+        """The four roles are the contract too -- renaming one is a breaking
+        change for both screens, not an implementation detail."""
+        result = helpers.call_action(u'nfwf_role_options')
+
+        assert [option[u'value'] for option in result[u'roles']] == [
+            u'platform_admin', u'program_admin', u'program_reader',
+            u'grant_editor']

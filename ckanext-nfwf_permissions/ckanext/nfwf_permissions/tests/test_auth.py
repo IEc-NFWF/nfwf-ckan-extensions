@@ -435,6 +435,16 @@ class TestRegistrationIsSafe(object):
 class TestPackageCreateOnTheFormPath(object):
     """package_create is asked twice per dataset, and in two different shapes.
 
+    The config pin matters and one pin is enough, which was checked rather than
+    assumed. ``test-core.ini`` sets both ``create_unowned_dataset`` and
+    ``create_dataset_if_not_in_organization`` to true where this deployment has
+    both false, but core reads them together --
+    ``all(check_config_permission(p) for p in (...))``,
+    ckan/logic/auth/create.py:24-28 -- so falsifying either one reproduces the
+    live answer. Every *bare* ``package_create`` assertion in this file lives in
+    this class; the rest pass ``owner_org``, where ``_check_group_auth`` decides
+    and neither setting is consulted.
+
     ``CreateView._prepare`` (ckan/views/dataset.py:516-527) asks it with no
     data_dict at all and aborts 403 if the answer is no, long before the form
     that would supply owner_org is rendered. Checking only the owner_org shape

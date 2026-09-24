@@ -563,6 +563,20 @@ class TestPermissionLabelsDoNotBloat(object):
 
         assert world.grant_a[u'id'] in {o[u'id'] for o in orgs}
 
+    @pytest.mark.parametrize(u'permission', [u'read', u'manage_group', None])
+    def test_the_belonging_questions_get_the_plain_answer(
+            self, permission, world):
+        """`read` builds permission labels and `manage_group` renders the
+        My Organizations dashboard -- both ask who the user *belongs* to, and
+        answering with every grant in the program cost ~490 redundant labels
+        and a 640KB page respectively. `None` is in here because CKAN's default
+        is `manage_group`, so omitting the parameter must behave the same."""
+        kwargs = {} if permission is None else {u'permission': permission}
+        orgs = _as(world.admin_a[u'name'], u'organization_list_for_user',
+                   **kwargs)
+
+        assert world.grant_a[u'id'] not in {o[u'id'] for o in orgs}
+
     def test_and_the_access_those_labels_carried_is_unchanged(self, world):
         """What matters is reach, not which label provides it."""
         from ckanext.nfwf_permissions import labels

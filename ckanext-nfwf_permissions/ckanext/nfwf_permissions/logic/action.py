@@ -46,6 +46,30 @@ DEFAULT_LIMIT = 20
 #: Ceiling on ``limit`` so one call cannot ask for every user at once.
 MAX_LIMIT = 100
 
+#: The permissions for which the chained ``organization_list_for_user`` adds a
+#: Program Administrator's program grants to what stock returns.
+#:
+#: An allowlist rather than a blocklist, and deliberately short. The
+#: augmentation exists for exactly one thing -- filling the Grant selector on
+#: the dataset form -- and every selector in this codebase asks for
+#: ``create_dataset``: core's ``package_basic_fields.html`` and both the
+#: ``nfwf_fields`` and ``nfwf_theme`` overrides, via
+#: ``h.organizations_available('create_dataset')``.
+#:
+#: The two permissions left out are both questions about *belonging*, which is
+#: not what a Program Administrator does with these grants:
+#:
+#: * ``read`` -- CKAN builds ``member-<org id>`` permission labels from this
+#:   call, and augmenting it put ~490 redundant labels on every request.
+#: * ``manage_group`` -- the "My Organizations" dashboard, which rendered every
+#:   grant in the program: 640KB and 508 links on the production snapshot. It is
+#:   also CKAN's default when a caller names no permission
+#:   (``ckan/logic/action/get.py:691``), so omitting the parameter does not
+#:   augment either.
+#:
+#: Add a permission here if a screen needs it; do not widen this to a blocklist.
+AUGMENTED_PERMISSIONS = [u'create_dataset']
+
 
 @toolkit.side_effect_free
 def nfwf_user_list(context, data_dict):
@@ -970,28 +994,34 @@ def organization_list_for_user(original_action, context, data_dict):
 
     Capacity is reported as ``admin`` because that is what the permission
     matrix actually grants them over these grants -- organization_update and
-    _delete, member_create, package_create and _update, dataset_purge. The
-    requested ``permission`` is otherwise not consulted, because ``admin``
-    satisfies every permission check in CKAN (``ckan/authz.py:357-358``), so
-    any permission stock might ask about is one they hold here.
+    _delete, member_create, package_create and _update, dataset_purge.
 
-    **``read`` is the one exception, and it is about cost, not entitlement.**
-    ``DefaultPermissionLabels.get_user_dataset_labels`` builds its
-    ``member-<org id>`` labels by calling this action with ``permission='read'``
-    (``ckan/lib/plugins.py``), so augmenting that call put one label on the user
-    for every grant in their programs. Measured on the production snapshot: a
-    Program Administrator of one program carried **494** permission labels, 488
-    of them ``member-``, against a single real membership row. Every one of those
-    is dead weight -- ``labels.py`` already gives the same user ``program-<id>``
-    and ``in-any-program``, which match exactly the datasets those labels would
-    have matched -- and they become a Solr filter query of ~494 OR'd terms on
-    every search they run, growing with the grant count.
+    **Which callers get the augmented list is ``AUGMENTED_PERMISSIONS``, and
+    that narrowness was learned twice.** An earlier version ignored the
+    requested ``permission`` entirely, on the reasoning that ``admin``
+    satisfies every permission check in CKAN (``ckan/authz.py:357-358``) so any
+    permission asked about is one they hold. True about *entitlement*, and
+    wrong about cost: both of the other callers in this codebase ask a question
+    about **belonging**, and answering it with 488 grants was expensive in two
+    different ways.
 
-    Nothing that needs the augmentation asks for ``read``. Every Grant selector
-    -- core's ``package_basic_fields.html`` and both the ``nfwf_fields`` and
-    ``nfwf_theme`` overrides -- calls ``h.organizations_available(
-    'create_dataset')``, and the organizations dashboard asks for
-    ``manage_group``. Checked, not assumed.
+    * ``read`` -- ``DefaultPermissionLabels.get_user_dataset_labels``
+      (``ckan/lib/plugins.py``) turns this list into ``member-<org id>``
+      permission labels. A Program Administrator of one program carried **494**
+      labels, 488 of them ``member-``, against a single real membership row,
+      and every search became a Solr filter query of that many OR'd terms. All
+      of them redundant: ``labels.py`` already gives the same user
+      ``program-<id>`` and ``in-any-program``, matching exactly those datasets.
+    * ``manage_group`` -- the "My Organizations" dashboard rendered every grant
+      in the program: **640KB and 508 links** on the production snapshot.
+      Accurate in principle and unusable in practice, and arguably wrong
+      anyway, since a Program Administrator does not *belong* to those grants.
+
+    What the augmentation is actually for is the Grant selector, which without
+    it renders empty and leaves a Program Administrator unable to create a
+    dataset at all -- the bug this override was written for. Every selector
+    asks for ``create_dataset``. Checked across core and every extension, not
+    assumed.
 
     Sysadmins need no special case: stock already returns every organization
     for them, so the set difference below is empty and nothing is added.
@@ -999,9 +1029,10 @@ def organization_list_for_user(original_action, context, data_dict):
     orgs = original_action(context, data_dict)
     data_dict = data_dict or {}
 
-    # See the docstring: this call is the permission-label builder, and
-    # `labels.py` already covers those datasets by another route.
-    if data_dict.get(u'permission') == u'read':
+    # CKAN's own default, so an omitted permission means here what it means to
+    # stock (`ckan/logic/action/get.py:691`).
+    if data_dict.get(u'permission', u'manage_group') not in (
+            AUGMENTED_PERMISSIONS):
         return orgs
 
     subject = data_dict.get(u'id') or context.get(u'user')
