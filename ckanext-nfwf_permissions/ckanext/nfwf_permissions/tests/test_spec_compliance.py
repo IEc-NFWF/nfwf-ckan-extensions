@@ -660,3 +660,71 @@ class TestSeeingWhoIsAssigned(object):
             id=world.grant_b[u'id'])
 
         assert result[u'id'] == world.grant_b[u'id']
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestRemovingAMember(object):
+    """Removal is half of "assign user permissions", and it is enforced in a
+    place `check_access` does not reach.
+
+    Core's `organization_member_delete` and `group_member_delete` auth
+    functions return True unconditionally; the real decision happens inside the
+    action, which re-checks through `member_delete` -> `member_create` -> ours.
+    So `check_access` says YES to a caller with no role at all, and that is
+    harmless only for as long as the action really does re-check.
+
+    That is the same shape as the bug in `member_list`, where the action's own
+    check was the thing refusing a Program Administrator. There it was too
+    strict for this model; here it is exactly right. Either way the only way to
+    know is to drive the action, which is what these do.
+    """
+
+    @pytest.fixture
+    def victim(self, world):
+        """Someone holding a Grant Editor row in the caller's program."""
+        user = factories.User()
+        _assign(world.grant_a[u'id'], user[u'name'], roles.CAPACITY_EDITOR)
+        roles.clear_cache()
+        return user
+
+    def test_the_programs_administrator_can_remove_them(self, world, victim):
+        _as(world.admin_a[u'name'], u'organization_member_delete',
+            id=world.grant_a[u'id'], user_id=victim[u'name'])
+        roles.clear_cache()
+
+        assert not roles.grants_for_user(victim[u'name'])
+
+    @pytest.mark.parametrize(u'actor', [u'reader_a', u'newcomer'])
+    def test_others_cannot_however_permissive_check_access_is(
+            self, actor, world, victim):
+        name = getattr(world, actor)[u'name']
+
+        # The permissive half, asserted so the test says why it exists.
+        helpers.call_auth(
+            u'organization_member_delete',
+            {u'model': model, u'user': name,
+             u'auth_user_obj': model.User.get(name)},
+            id=world.grant_a[u'id'])
+
+        with pytest.raises(toolkit.NotAuthorized):
+            _as(name, u'organization_member_delete',
+                id=world.grant_a[u'id'], user_id=victim[u'name'])
+        roles.clear_cache()
+
+        assert roles.grants_for_user(victim[u'name']), (
+            u'the member was stripped by somebody who should not be able to')
+
+    def test_another_programs_administrator_cannot(self, world, victim):
+        """The cross-program boundary has to hold on removal too, not only on
+        the add."""
+        other_admin = factories.User()
+        _assign(world.program_b[u'id'], other_admin[u'name'],
+                roles.CAPACITY_ADMIN)
+        roles.clear_cache()
+
+        with pytest.raises(toolkit.NotAuthorized):
+            _as(other_admin[u'name'], u'organization_member_delete',
+                id=world.grant_a[u'id'], user_id=victim[u'name'])
+        roles.clear_cache()
+
+        assert roles.grants_for_user(victim[u'name'])
