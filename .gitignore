@@ -1,2 +1,14 @@
 ckan/
 ckanext-oauth2
+# Editor and OS artefacts. Four of these were tracked -- two Thumbs.db, a Vim
+# swapfile, and a footer.html.save holding a superseded contact address.
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*.swo
+*~
+*.save
+*.bak
+*.orig
