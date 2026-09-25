@@ -61,7 +61,19 @@ PROGRAM_LABEL = u'program-%s'
 #: A single constant label meaning "this dataset's grant belongs to some
 #: program". Program Administrators hold it, which is how they get read access
 #: across every program without every program id being enumerated into their
-#: label set. That breadth is deliberate, not a side effect of the encoding.
+#: label set.
+#:
+#: The breadth is a requirement, not an encoding artefact. "User Roles and
+#: Permissions Redesign.docx" lists under Program Administrator:
+#:
+#:     View/read datasets and resources under other programs
+#:     (no editing capability)
+#:
+#: Enumerating each program id into the label set would grant exactly the same
+#: access for a larger index; the constant is the cheaper spelling of the same
+#: rule. Verified against the document on 2026-09-25: read is allowed and every
+#: write -- package and resource, update, delete and create -- is refused, which
+#: is the "(no editing capability)" half.
 IN_ANY_PROGRAM = u'in-any-program'
 
 
@@ -117,11 +129,20 @@ class NfwfPermissionLabels(DefaultPermissionLabels):
                           [roles.CAPACITY_ADMIN, roles.CAPACITY_MEMBER]))
 
         # A Program Administrator reads private data in every grant that
-        # belongs to *any* program, not just their own. That breadth was
-        # accepted deliberately rather than being an oversight -- see the
-        # decision log referenced in the README. Grants with no program stay
-        # invisible to them, which makes those grants
-        # Platform-Administrator-only territory.
+        # belongs to *any* program, not just their own. This is the redesign
+        # document's "View/read datasets and resources under other programs
+        # (no editing capability)" -- see IN_ANY_PROGRAM above for the quote
+        # and what was measured against it.
+        #
+        # Grants with no program stay invisible to them, which makes those
+        # grants Platform-Administrator-only territory. That follows the same
+        # sentence: a grant under no program is not "under other programs".
+        #
+        # Worth NFWF knowing that the breadth is automatic. A new program's
+        # private datasets become readable by every existing Program
+        # Administrator as soon as a grant is filed under it, with no
+        # per-program decision. The document intends this; nothing here
+        # re-asks the question.
         if roles.programs_for_user(user_obj, [roles.CAPACITY_ADMIN]):
             labels.append(IN_ANY_PROGRAM)
 

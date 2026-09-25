@@ -103,6 +103,45 @@ without it they would hold a permission they could never use. Core `user_list`
 stays closed, which is the distinction: they can look up a named person, not
 browse the whole directory. See `logic/auth.py`.
 
+### What each role can read
+
+Authorization above decides who reaches the *API*. What they can **see** is a
+separate mechanism: CKAN's `IPermissionLabels`, implemented in `labels.py`. A
+label is written into each dataset's Solr document at index time, and each user
+carries a set of labels; a dataset is visible when the two sets intersect.
+
+| Role | Private datasets it can read | Label |
+|---|---|---|
+| Platform Administrator | all | (sysadmin short-circuit, no label needed) |
+| Program Administrator | **every grant under any program** | `in-any-program` |
+| Program Reader/Member | grants under the programs they are assigned to | `program-<id>` |
+| Grant Editor | the grants they hold a row on | CKAN's own `member-<org_id>` |
+
+The second row is the one that surprises people, so it is worth being explicit
+that it is a requirement rather than a convenience. The redesign document lists
+under Program Administrator:
+
+> View/read datasets and resources under other programs (no editing capability)
+
+Both halves were measured against production data on 2026-09-25. A Program
+Administrator reading a private dataset in a program they do **not** administer:
+`package_show` and `resource_show` allowed; `package_update`, `package_delete`,
+`package_patch`, `resource_create`, `resource_update` and `resource_delete` all
+refused. Of 20 private datasets, 19 sit under a program and carry the label; the
+one whose grant has no program stays Platform-Administrator-only, which follows
+the same sentence — a grant under no program is not "under other programs".
+
+Two properties worth knowing rather than rediscovering:
+
+- **The breadth is automatic.** A new program's private datasets become readable
+  by every existing Program Administrator the moment a grant is filed under it.
+  No per-program decision is taken, and nothing re-asks the question. The
+  document intends this, but it should be intended knowingly.
+- **Labels are frozen at index time.** Changing a grant's program does not move
+  its datasets' labels until something reindexes them — which is why
+  `_reindex_if_program_changed` exists, and why a Solr failure during that move
+  now warns the administrator rather than only the log.
+
 ---
 
 ## Vocabulary
@@ -361,11 +400,28 @@ Error paths:
 
 ## Open questions
 
-1. **Grant selection in the modal.** Programs are a three-item checkbox list, so
-   `nfwf_role_options` returns them inline. Production has roughly **570 grants**,
-   which is not a checkbox list. Suggest a searchable picker built on core
-   `organization_autocomplete`, or a paged `organization_list`; a dedicated
-   `nfwf_grant_list` can be added if neither fits. Needs a UI decision.
+1. **Grant selection in the modal — not an open question, a gap.** This was
+   listed here as needing a UI decision. It does not: US 0126 slide 5 already
+   made it, and says
+
+   > If Grant Editor is selected, dynamically display the list of grants to
+   > select, **by program**. [...] Allow multiple selection via check-box.
+   > Display up to 10 grants. Include a scroll bar to see more.
+
+   `nfwf_role_options` returns `roles` and `programs` and deliberately omits
+   grants, on the stated grounds that roughly 570 of them "is not a checkbox
+   list". The mockup answers that objection directly — ten at a time behind a
+   scroll bar — so the reason does not hold, and the two alternatives suggested
+   here (`organization_autocomplete`, a paged `organization_list`) do not group
+   by program, which the slide requires.
+
+   What the modal needs and cannot currently get: grants, **grouped by
+   program**, paged. `ROLE_SCOPE` already tells the frontend *which* picker to
+   show (`grant` for Grant Editor), so only the data source is missing. The
+   `nfwf_grant_list` named below as a fallback is the shape that fits. Found
+   2026-09-25 sweeping the mockups; the earlier compliance pass checked the
+   four places the code cites a mockup and not the reverse direction, which is
+   how this stayed hidden.
 2. **Minimum one assignment.** `nfwf_user_role_set` currently *requires* at least
    one program for a program role and one grant for `grant_editor`, on the
    grounds that a Program Administrator of no programs has no permissions and is
