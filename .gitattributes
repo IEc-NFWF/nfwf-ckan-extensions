@@ -1,0 +1,39 @@
+# Line endings.
+#
+# This repository has been edited on Windows and Linux without a rule, so
+# stored blobs are mixed: the extensions are mostly LF, some templates are
+# CRLF. `text=auto` makes git normalise to LF in the repository from now on
+# while checking out whatever each platform expects.
+#
+# Existing files are deliberately NOT rewritten by adding this. Git only
+# normalises a file when it is next committed, so history stays readable and
+# no commit turns into a whole-file diff. To convert everything in one
+# deliberate pass instead, run `git add --renormalize .` and commit that on
+# its own.
+* text=auto
+
+# Binary. Listed explicitly so git never tries to normalise or diff them as
+# text, whatever the content heuristic decides.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.otf   binary
+*.mo    binary
+
+# SVGs are text and worth diffing, but they are generated often enough that a
+# conflict in one is rarely worth resolving by hand.
+*.svg   text eol=lf
+
+# Shell scripts must keep LF or they will not run on Linux, whatever the
+# platform they were edited on.
+*.sh    text eol=lf
