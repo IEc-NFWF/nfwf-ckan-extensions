@@ -18,6 +18,8 @@ definition (``roles.PROGRAM_ADMIN_ASSIGNABLE_ROLES``, ``PROGRAM_CAPACITIES``)
 rather than repeating the literal values, so widening one of those lists does
 not leave a test asserting the old contents.
 """
+import re
+
 import pytest
 
 import ckan.tests.factories as factories
@@ -728,3 +730,196 @@ class TestRemovingAMember(object):
         roles.clear_cache()
 
         assert roles.grants_for_user(victim[u'name'])
+
+
+@pytest.mark.usefixtures(u'clean_db', u'with_plugins')
+class TestOwnerGroupMustNameAProgram(object):
+    """`owner_group` was free-form for the callers most able to write to it.
+
+    `_assert_grant_belongs_to_an_administered_program` decides *which* program
+    a caller may file a grant under, and exempts Platform Administrators and
+    `ignore_auth` outright -- correctly, since a grant belonging to no program
+    could not otherwise be created. The side effect was that the field took any
+    string at all from a sysadmin: a typo, a stale id, or a grant id pasted
+    where a program id belongs.
+
+    Nothing stored on production fails the new check -- 540 valid, 31 empty,
+    zero dangling -- so this pins the current shape rather than tightening
+    against it.
+    """
+
+    def _sysadmin(self):
+        return factories.Sysadmin()
+
+    def test_a_grant_id_is_refused(self):
+        """The paste most likely to happen, and the one the read path
+        silently swallows: `program_id` returns None for an organization."""
+        grant = factories.Organization()
+        with pytest.raises(toolkit.ValidationError) as caught:
+            helpers.call_action(
+                u'organization_create',
+                context={u'user': self._sysadmin()[u'name']},
+                name=u'probe-grant-named-by-a-grant',
+                extras=[{u'key': roles.OWNER_GROUP_EXTRA,
+                         u'value': grant[u'id']}])
+        assert u'owner_group' in caught.value.error_dict
+
+    def test_an_unknown_reference_is_refused(self):
+        with pytest.raises(toolkit.ValidationError) as caught:
+            helpers.call_action(
+                u'organization_create',
+                context={u'user': self._sysadmin()[u'name']},
+                name=u'probe-grant-unknown-program',
+                extras=[{u'key': roles.OWNER_GROUP_EXTRA,
+                         u'value': u'no-such-program'}])
+        assert u'owner_group' in caught.value.error_dict
+
+    def test_a_deleted_program_is_refused(self):
+        program = factories.Group()
+        sysadmin = self._sysadmin()
+        helpers.call_action(u'group_delete',
+                            context={u'user': sysadmin[u'name']},
+                            id=program[u'id'])
+        roles.clear_cache()
+        with pytest.raises(toolkit.ValidationError) as caught:
+            helpers.call_action(
+                u'organization_create', context={u'user': sysadmin[u'name']},
+                name=u'probe-grant-deleted-program',
+                extras=[{u'key': roles.OWNER_GROUP_EXTRA,
+                         u'value': program[u'id']}])
+        assert u'owner_group' in caught.value.error_dict
+
+    def test_empty_is_still_allowed(self):
+        """31 grants are in this state and `orphan_grants` reports them. A
+        Platform Administrator has to be able to create a grant before
+        deciding where it belongs."""
+        created = helpers.call_action(
+            u'organization_create', context={u'user': self._sysadmin()[u'name']},
+            name=u'probe-grant-no-program',
+            extras=[{u'key': roles.OWNER_GROUP_EXTRA, u'value': u''}])
+
+        assert created[u'id']
+        assert roles.program_id_for_grant(created[u'id']) is None
+
+    def test_a_real_program_is_accepted(self):
+        program = factories.Group()
+        created = helpers.call_action(
+            u'organization_create', context={u'user': self._sysadmin()[u'name']},
+            name=u'probe-grant-real-program',
+            extras=[{u'key': roles.OWNER_GROUP_EXTRA,
+                     u'value': program[u'id']}])
+        roles.clear_cache()
+
+        assert roles.program_id_for_grant(created[u'id']) == program[u'id']
+
+    def test_the_top_level_field_is_checked_too(self):
+        """The route the grant form actually uses.
+
+        `nfwf_fields._modify_group_schema` puts `convert_to_extras` on
+        `owner_group`, and that runs during validation -- after a chained
+        action sees the data -- so every form submission arrives top level
+        and only an API caller builds `extras` directly. Both are checked.
+        """
+        grant = factories.Organization()
+        with pytest.raises(toolkit.ValidationError) as caught:
+            helpers.call_action(
+                u'organization_create',
+                context={u'user': self._sysadmin()[u'name']},
+                name=u'probe-grant-top-level', owner_group=grant[u'id'])
+        assert u'owner_group' in caught.value.error_dict
+
+    def test_it_holds_on_update_too(self):
+        """`organization_patch` merges onto the stored record and calls
+        `organization_update`, so covering update covers patch."""
+        program = factories.Group()
+        sysadmin = self._sysadmin()
+        grant = factories.Organization(extras=[
+            {u'key': roles.OWNER_GROUP_EXTRA, u'value': program[u'id']}])
+
+        with pytest.raises(toolkit.ValidationError) as caught:
+            helpers.call_action(
+                u'organization_update', context={u'user': sysadmin[u'name']},
+                id=grant[u'id'], name=grant[u'name'],
+                extras=[{u'key': roles.OWNER_GROUP_EXTRA,
+                         u'value': u'no-such-program'}])
+        assert u'owner_group' in caught.value.error_dict
+
+
+@pytest.mark.usefixtures(u'clean_db', u'with_plugins')
+class TestOwnerGroupThroughTheForm(object):
+    """The same guard, driven through the view instead of `call_action`.
+
+    Every other test in this suite calls actions directly, which skips two
+    things the real path does. The view builds `data_dict` from posted form
+    fields, so a value arrives as whatever the form spells it -- the grant
+    form's selector posts a program *name* where the tests above post ids, and
+    `roles.program_id` resolving both was asserted rather than run. And a
+    `ValidationError` raised inside an action has to come back as the form
+    re-rendered with the message on the field; `ckan/views/group.py` turns a
+    `NotAuthorized` into `abort(404)` instead, which is exactly why the
+    sibling guard raises `ValidationError` rather than refusing outright.
+
+    **What this config cannot reach.** `test.ini` loads only
+    `nfwf_permissions`, so this is stock CKAN's organization form, not the one
+    `nfwf_fields` builds. The guard still *sees* a top-level `owner_group`,
+    because it reads `data_dict` before validation -- which is what these
+    tests exercise -- but stock never *stores* it, since `convert_to_extras`
+    lives in `nfwf_fields`. So storage is asserted at action level above and
+    against the running site, not here. The `extras` route likewise reaches
+    the guard through the API rather than through this form, and is covered by
+    `TestOwnerGroupMustNameAProgram`; the update path by
+    `test_it_holds_on_update_too` there.
+
+    Follows CKAN's own controller tests (`ckan/tests/controllers/test_group.py`)
+    in using the `app` fixture with a token header. Driving
+    `app.flask_app.test_client()` directly instead leaves a session holding
+    locks, and `clean_db`'s teardown then deadlocks against it on
+    `DROP TABLE api_token`.
+    """
+
+    @pytest.fixture
+    def headers(self):
+        # Cleared per test: these run after TestOwnerGroupMustNameAProgram,
+        # and a carried-over resolution makes a valid program name look
+        # unknown -- which reads as the guard refusing a good value.
+        roles.clear_cache()
+        return {u'Authorization': factories.SysadminWithToken()[u'token']}
+
+    def test_a_program_name_is_accepted(self, app, headers):
+        """The form's selector posts a name, not an id, and `program_id`
+        resolving both was asserted rather than run until this test."""
+        program = factories.Group()
+
+        response = app.post(
+            url=u'/organization/new', headers=headers,
+            data={u'name': u'form-grant-ok', u'title': u'Ok',
+                  u'owner_group': program[u'name'], u'save': u''})
+
+        assert u'is not an active program' not in response.body
+        assert model.Group.by_name(u'form-grant-ok') is not None, (
+            u'a valid program name was refused')
+
+    def test_a_grant_name_is_refused_on_the_form(self, app, headers):
+        """Re-rendered with the message, not a 404 and not a 500.
+
+        The paste most likely to happen once the selector lists both kinds of
+        group, and the one the read path silently swallows.
+        """
+        grant = factories.Organization()
+
+        response = app.post(
+            url=u'/organization/new', headers=headers,
+            data={u'name': u'form-grant-bad', u'title': u'Bad',
+                  u'owner_group': grant[u'name'], u'save': u''})
+
+        assert u'is not an active program' in response.body
+        assert model.Group.by_name(u'form-grant-bad') is None
+
+    def test_an_unknown_reference_is_refused_on_the_form(self, app, headers):
+        response = app.post(
+            url=u'/organization/new', headers=headers,
+            data={u'name': u'form-grant-unknown', u'title': u'Unknown',
+                  u'owner_group': u'no-such-program', u'save': u''})
+
+        assert u'is not an active program' in response.body
+        assert model.Group.by_name(u'form-grant-unknown') is None

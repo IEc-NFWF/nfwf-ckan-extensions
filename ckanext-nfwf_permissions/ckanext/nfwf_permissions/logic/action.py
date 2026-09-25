@@ -674,6 +674,71 @@ def _set_sysadmin(context, user, wanted):
 # has to hold on update as well as create, or a Program Administrator could
 # take a grant they legitimately hold and move it into someone else's program.
 
+def _submitted_owner_group(data_dict):
+    """``owner_group`` as submitted, from either place a caller may put it.
+
+    The grant form posts it as a top-level field and
+    ``nfwf_fields._modify_group_schema`` runs ``convert_to_extras`` on it
+    during validation -- which is *after* a chained action sees the data, so
+    for every form submission it is top level. An API caller may instead build
+    ``extras`` itself, and then the top-level key is absent.
+
+    Both are checked because the two routes reach different guards.
+    ``_assert_grant_belongs_to_an_administered_program`` reads only the top
+    level, so the extras route refuses a Program Administrator outright --
+    their own program included -- since an absent value cannot match anything
+    they administer. That fails closed and is reachable only by API, so it is
+    left alone rather than widened. A sysadmin, though, is exempt from that
+    guard entirely, so the extras route is exactly where an unchecked value
+    would have landed from the one caller most likely to be scripting it.
+    """
+    data_dict = data_dict or {}
+    if data_dict.get(u'owner_group'):
+        return data_dict[u'owner_group']
+    for extra in data_dict.get(u'extras') or []:
+        if extra.get(u'key') == roles.OWNER_GROUP_EXTRA:
+            return extra.get(u'value')
+    return None
+
+
+def _assert_owner_group_names_a_program(data_dict):
+    """Refuse an ``owner_group`` that does not name an active program.
+
+    Integrity, not authorization, which is why this runs for *everyone* --
+    Platform Administrators and ``ignore_auth`` callers included. The function
+    below decides *which* program a caller may file a grant under and exempts
+    both; that left the field free-form for exactly the callers most able to
+    write to it, so a typo, a stale id, or a grant id pasted where a program id
+    belongs was stored without complaint.
+
+    Empty is allowed and means "no program". That state is legitimate -- 31
+    grants are in it on production, `migration.orphan_grants` reports them, and
+    a Platform Administrator has to be able to create a grant before deciding
+    where it belongs.
+
+    ``roles.program_id`` already answers the whole question: it returns None
+    for an unknown reference, a deleted group, and an id that names a grant
+    rather than a program.
+
+    Nothing currently stored fails this. Measured on the production snapshot,
+    2026-09-25: of 571 ``owner_group`` rows, 540 name a valid active program
+    and 31 are empty -- none dangling, none naming a grant, none naming a
+    deleted group. So this pins the data's current shape rather than
+    tightening against it, which is the cheap moment to add it.
+
+    The read path already defends itself -- ``_program_id_for_grant_id`` joins
+    and filters on state and ``is_organization``, so a bad value degrades to
+    "no program" rather than breaking. This moves the catch to write time,
+    where whoever typed it is still holding the form.
+    """
+    submitted = _submitted_owner_group(data_dict)
+    if not submitted:
+        return
+    if roles.program_id(submitted) is None:
+        raise toolkit.ValidationError({u'owner_group': [toolkit._(
+            u'"{0}" is not an active program.').format(submitted)]})
+
+
 def _assert_grant_belongs_to_an_administered_program(context, data_dict):
     """Refuse to file a grant under a program the caller does not administer.
 
@@ -725,6 +790,7 @@ def _assert_grant_belongs_to_an_administered_program(context, data_dict):
 @toolkit.chained_action
 def organization_create(original_action, context, data_dict):
     """Enforce which program a new grant is filed under."""
+    _assert_owner_group_names_a_program(data_dict)
     _assert_grant_belongs_to_an_administered_program(context, data_dict)
     return original_action(context, data_dict)
 
@@ -740,6 +806,7 @@ def organization_update(original_action, context, data_dict):
     Reindexes the grant's datasets when the program actually changes, because
     their permission labels are derived from it -- see ``labels``.
     """
+    _assert_owner_group_names_a_program(data_dict)
     _assert_grant_belongs_to_an_administered_program(context, data_dict)
 
     before = roles.program_id_for_grant(data_dict.get(u'id'))

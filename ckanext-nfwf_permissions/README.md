@@ -417,11 +417,40 @@ Error paths:
 
    What the modal needs and cannot currently get: grants, **grouped by
    program**, paged. `ROLE_SCOPE` already tells the frontend *which* picker to
-   show (`grant` for Grant Editor), so only the data source is missing. The
-   `nfwf_grant_list` named below as a fallback is the shape that fits. Found
+   show (`grant` for Grant Editor), so only the data source is missing. Found
    2026-09-25 sweeping the mockups; the earlier compliance pass checked the
    four places the code cites a mockup and not the reverse direction, which is
    how this stayed hidden.
+
+   **Sizing, which should shape the endpoint.** The problem is one program,
+   not the total:
+
+   | Program | Grants |
+   |---|---|
+   | National Coastal Resilience Fund | 487 |
+   | Emergency Coastal Resilience Fund | 41 |
+   | Hurricane Sandy Coastal Resiliency | 12 |
+   | *no program* | *31* |
+   | **total active grants** | **571** |
+
+   Two of the three groups render inline comfortably; only NCRF needs paging
+   or search. A uniformly paged endpoint is over-engineered for the other two.
+
+   **Decided 2026-09-25: orphan grants get a fourth "(no program)" group,
+   shown only to whoever can actually reach them.** The 31 grants with an
+   empty `owner_group` have no program heading to sit under. Excluding them
+   outright would mean nobody could assign a Grant Editor to any of them
+   through the modal -- a silent capability gap rather than a cosmetic choice
+   -- so a Platform Administrator sees them as their own group.
+
+   A Program Administrator does not, and the group should be **omitted for
+   them rather than rendered empty**. A grant under no program is administered
+   by nobody: `/organization/edit/<an orphan grant>` answers 403 to a Program
+   Administrator, measured against the snapshot, and `labels.py` already calls
+   orphan grants Platform-Administrator-only territory. `_callers_scope`
+   filters them out on its own, so the endpoint returns nothing for that group
+   -- the frontend has to know an absent group is correct here and not a
+   loading failure. `migration.orphan_grants` identifies exactly this set.
 2. **Minimum one assignment.** `nfwf_user_role_set` currently *requires* at least
    one program for a program role and one grant for `grant_editor`, on the
    grounds that a Program Administrator of no programs has no permissions and is

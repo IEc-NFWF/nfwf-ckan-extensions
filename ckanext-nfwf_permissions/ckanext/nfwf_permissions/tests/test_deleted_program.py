@@ -106,8 +106,20 @@ class TestDeletedProgram(object):
             g[u'group_name'] for g in migration.orphan_grants()]
 
     def test_an_owner_group_naming_a_grant_is_not_a_program(self, world):
-        """The join filters on is_organization too, so this resolves to None."""
-        confused = factories.Organization(extras=[
-            {u'key': roles.OWNER_GROUP_EXTRA, u'value': world.grant[u'id']}])
+        """The join filters on is_organization too, so this resolves to None.
+
+        Written straight to the model rather than through
+        `organization_create`, because `_assert_owner_group_names_a_program`
+        now refuses this value at write time -- for `ignore_auth` callers too,
+        since integrity is not authorization. The read path still has to hold:
+        it is what protects rows that predate that guard, and anything written
+        by direct SQL. Both halves are now tested, one per layer.
+        """
+        confused = factories.Organization()
+        model.Session.add(model.GroupExtra(
+            group_id=confused[u'id'], key=roles.OWNER_GROUP_EXTRA,
+            value=world.grant[u'id'], state=u'active'))
+        model.Session.commit()
+        roles.clear_cache()
 
         assert roles.program_id_for_grant(confused[u'id']) is None
