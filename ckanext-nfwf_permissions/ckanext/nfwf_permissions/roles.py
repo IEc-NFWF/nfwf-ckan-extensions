@@ -506,9 +506,16 @@ def holds_both_scopes(user):
     can do, which is the wrong direction for an administrative table to be
     wrong in.
 
-    Raw, and deliberately the same question ``migration`` asks, so the user
-    table and the migration report cannot disagree about which accounts are
-    affected. It says nothing about whether those assignments are *consulted*:
+    Raw, and deliberately the same question ``migration`` asks -- but by a
+    second implementation, not a shared one. ``migration.plan`` builds its own
+    ``scopes`` set from a bulk row scan, because it walks every account at once
+    and a per-account call here would be N+1. Nothing structural keeps the two
+    aligned; a capacity filter added to either drifts them apart in silence.
+    ``TestDualScopeIsVisible`` runs both over the same population and compares
+    them, which is what actually holds them together. Measured at 0
+    disagreements across 180 production accounts on 2026-09-25.
+
+    It says nothing about whether those assignments are *consulted*:
     a Platform Administrator's are retained and superseded, so pair this with
     ``role`` or ``assignments_in_effect`` before warning anybody.
     """

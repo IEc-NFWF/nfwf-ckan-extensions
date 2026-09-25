@@ -17,7 +17,7 @@ import ckan.tests.helpers as helpers
 from ckan import model
 from ckan.plugins import toolkit
 
-from ckanext.nfwf_permissions import roles
+from ckanext.nfwf_permissions import migration, roles
 from ckanext.nfwf_permissions.logic import validators
 
 
@@ -605,14 +605,48 @@ class TestDualScopeIsVisible(object):
         assert all(u'dual_scope' in row for row in rows)
 
     def test_it_asks_the_same_question_the_migration_does(self, population):
-        """One definition, so the user table and `migrate-roles` cannot
-        disagree about which accounts are affected."""
+        """The user table and `migrate-roles` must not disagree about which
+        accounts are affected.
+
+        They are two implementations, not one. `roles.holds_both_scopes` asks
+        per account; `migration.plan` builds a `scopes` set from its own bulk
+        row scan, because it processes every account at once and a per-account
+        query would be N+1. Nothing structural keeps them aligned -- add a
+        capacity filter to either and they drift apart silently -- so this
+        pins it instead.
+
+        The previous version of this test compared `dual_scope` against
+        `roles.holds_both_scopes`, which is the function that produces it
+        (`accounts.py`), and so could not fail for the reason its name gives.
+        This one runs the migration.
+        """
         _assign(population.program_a[u'id'], population.editor[u'name'],
                 roles.CAPACITY_MEMBER)
         roles.clear_cache()
 
-        record = helpers.call_action(
-            u'nfwf_user_role_show', id=population.editor[u'name'])
+        plan = migration.plan()
+        flagged_by_migration = {
+            account[u'account'] for account in plan[u'accounts']
+            if u'holds both a program and a grant assignment'
+            in account.get(u'reason', u'')}
 
-        assert record[u'dual_scope'] == roles.holds_both_scopes(
-            population.editor[u'name'])
+        compared = 0
+        for account in plan[u'accounts']:
+            name = account[u'account']
+            user = model.User.get(name)
+            # The migration short-circuits a sysadmin to `keep` before it
+            # reaches the dual test, so it never reports one. That is the
+            # documented asymmetry, not a disagreement -- `dual_scope` is raw
+            # and callers pair it with `role`.
+            if user is None or user.sysadmin:
+                continue
+            compared += 1
+            assert roles.holds_both_scopes(user) == (
+                name in flagged_by_migration), (
+                    u'%s: holds_both_scopes=%s migration=%s' % (
+                        name, roles.holds_both_scopes(user),
+                        name in flagged_by_migration))
+
+        assert compared, u'population produced nothing to compare'
+        assert population.editor[u'name'] in flagged_by_migration, (
+            u'the account just made dual-scope was not flagged')

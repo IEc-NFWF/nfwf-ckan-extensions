@@ -226,8 +226,23 @@ def user_record(user):
 
     Pair it with ``role`` before warning: a Platform Administrator's
     assignments are retained but never consulted, so ``dual_scope`` may be true
-    for them without meaning anything. Same question the migration report asks,
-    so the two cannot disagree about which accounts are affected.
+    for them without meaning anything. Currently inert -- the only dual-scope
+    sysadmin is ``legacy-admin``, which is deactivated and so outside the default
+    list -- but one promotion puts a live account there. The row carries
+    ``role``, which is enough to suppress it; ``assignments_in_effect`` on
+    ``role_record`` answers the same question for the modal.
+
+    **The flag is the common case, not the exception**, which matters more to
+    whoever builds the table. 116 of 242 accounts hold both scopes: 114 report
+    as Program Reader/Member and 2 as Program Administrator. One-role-per-user
+    postdates the data, so the guards refuse new combinations while nothing
+    rewrote the old ones, and ``migrate-roles`` lists every one as ``decide``.
+    A badge on half the rows is noise; this probably wants a filter or a
+    column rather than a warning icon.
+
+    The migration report asks the same question through a second
+    implementation -- see ``roles.holds_both_scopes`` for why they are separate
+    and what pins them together.
     """
     role = roles.user_role(user)
     status = status_of(user)
