@@ -227,8 +227,8 @@ def user_record(user):
     Pair it with ``role`` before warning: a Platform Administrator's
     assignments are retained but never consulted, so ``dual_scope`` may be true
     for them without meaning anything. Currently inert -- the only dual-scope
-    sysadmin is ``legacy-admin``, which is deactivated and so outside the default
-    list -- but one promotion puts a live account there. The row carries
+    sysadmin is a legacy shared account, which is deactivated and so outside
+    the default list -- but one promotion puts a live account there. The row carries
     ``role``, which is enough to suppress it; ``assignments_in_effect`` on
     ``role_record`` answers the same question for the modal.
 

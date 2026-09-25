@@ -162,7 +162,9 @@ class TestUserList(object):
                    for user in result[u'results'])
 
     def test_search_matches_email(self, population):
-        result = helpers.call_action(u'nfwf_user_list', q=u'nfwf.org')
+        """The search term is the fixture's email domain -- keep the two in
+        step if the fixtures are ever renamed again."""
+        result = helpers.call_action(u'nfwf_user_list', q=u'example.org')
         assert result[u'count'] >= 1
 
     def test_program_filter(self, population):

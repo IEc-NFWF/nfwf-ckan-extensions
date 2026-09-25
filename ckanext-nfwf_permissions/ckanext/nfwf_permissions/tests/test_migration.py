@@ -1,7 +1,8 @@
 # encoding: utf-8
 """Tests for the Q3 migration report.
 
-The report is the artifact Emily and Adrian sign off on, so what matters is
+The report is the artifact the product owner and the UI developer sign off
+on, so what matters is
 that it classifies each assignment the way the decisions in the plan say it
 should, and that it never overstates what a migration would actually write.
 

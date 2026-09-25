@@ -176,7 +176,7 @@ Comments in this extension refer to decisions rather than restating them —
 "settled 2026-08-19", "accepted deliberately". Those refer to the Task 125
 design document and the Teams thread it summarises, which are **not in this
 repository**. If you are reading a comment that leans on a decision you cannot
-find, ask Janusz Strzepek or Emily; the substance is meant to be stated inline,
+find, ask the maintainers or the NFWF product owner; the substance is meant to be stated inline,
 so a missing reference should never leave you unable to follow the reasoning. If
 it does, that is a bug in the comment.
 
@@ -469,7 +469,7 @@ Error paths:
    `nfwf_user_reject` on an account that has been active for a year, or
    `nfwf_user_approve` on one that was already approved. Rejection reads like it
    is meant for *requests*, so rejecting a long-active account is plausibly a
-   misclick that should be a deactivation instead. Needs a decision from Emily
+   misclick that should be a deactivation instead. Needs a decision from the product owner
    before the real implementation enforces anything; until then the API accepts
    any of them.
 

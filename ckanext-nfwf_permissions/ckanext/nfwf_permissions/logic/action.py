@@ -483,8 +483,8 @@ def _assert_an_administrator_remains(context, user, field, verb):
             u'You cannot {0} your own Platform Administrator account. Ask '
             u'another Platform Administrator to do it.').format(verb)]})
 
-    # Deleted accounts do not count: `legacy-admin` carries the flag in this data
-    # and could not log in to use it.
+    # Deleted accounts do not count. A legacy shared administrator account
+    # carries the flag in this data and could not log in to use it.
     remaining = model.Session.query(model.User).filter(
         model.User.sysadmin.is_(True),
         model.User.state == u'active',
