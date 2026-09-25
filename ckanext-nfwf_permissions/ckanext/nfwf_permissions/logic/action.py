@@ -12,6 +12,8 @@ layer of authorize, validate, delegate.
 """
 import logging
 
+import flask
+
 from ckan import authz, model
 from ckan.lib import search
 from ckan.lib.dictization import model_dictize
@@ -770,7 +772,8 @@ def _reindex_if_program_changed(organization, before):
     move is already committed, so the next identical request reads ``before``
     as the new program, finds no change, and returns early without reindexing
     anything. Recovery is therefore always out-of-band -- see the handler
-    below, which logs the remedy. Making the retry work would mean comparing
+    below, which logs the remedy and tells the administrator who caused it.
+    Making the retry work would mean comparing
     against what Solr actually holds rather than against the database, and
     that costs a Solr query on every grant edit to buy robustness against a
     failure that needs Solr to be down mid-write. If that trade ever looks
@@ -822,6 +825,33 @@ def _reindex_if_program_changed(organization, before):
             u'Resubmitting the form will NOT fix this -- run '
             u'`ckan search-index rebuild` (or rebuild just these ids: %s).',
             organization[u'id'], u' '.join(package_ids))
+
+        # Logged first, so a failure below cannot cost us the only record.
+        #
+        # The log alone is not enough here. The request is about to return
+        # success for a move that half-happened, and the half that did not is
+        # the half that keeps private datasets away from the previous
+        # program's readers -- so the one person who knows the change was made,
+        # and is placed to raise it, is the administrator making it. Nothing
+        # else surfaces this: there is no worker to retry it, and no alert on
+        # the log.
+        #
+        # Guarded because this runs for API and CLI callers too, where there
+        # is no session to flash into; `roles._cache` guards the same way and
+        # for the same reason. In its own try/except because a failure to warn
+        # must not land on top of the failure it is warning about.
+        try:
+            if flask.has_request_context():
+                toolkit.h.flash_error(toolkit._(
+                    u"The program was changed, but this grant's datasets "
+                    u"could not be reindexed. They still carry the previous "
+                    u"program's permission labels, so that program's readers "
+                    u"can still see private datasets in this grant. Saving "
+                    u"this form again will not fix it -- a site administrator "
+                    u"needs to run `ckan search-index rebuild`."))
+        except Exception:
+            log.exception(u'Could not warn the administrator about the '
+                          u'failed reindex of grant %s.', organization[u'id'])
 
 
 # -- Chained membership actions ----------------------------------------------

@@ -197,7 +197,9 @@ class TestReindexFailureIsSurvivable(object):
     response -- resubmit the form -- repairs nothing: ``before`` is then read
     from the committed value, so the change-detection finds no change and
     skips the reindex. Recovery is necessarily out-of-band, which is why the
-    failure is logged with the remedy rather than raised.
+    failure is logged with the remedy rather than raised -- and why the
+    administrator who made the change is told, since the request is otherwise
+    about to report success for a move that half-happened.
     """
 
     def _grant_in(self, program_id):
@@ -244,6 +246,54 @@ class TestReindexFailureIsSurvivable(object):
 
         assert u'search-index rebuild' in caplog.text
         assert u'Resubmitting the form will NOT fix this' in caplog.text
+
+    def test_the_administrator_is_warned(self, monkeypatch, app):
+        """The log records it; this is what reaches the person responsible.
+
+        Without this the request returns success and the only trace that the
+        previous program's readers still hold access is a log line.
+        """
+        from ckan.lib import search
+        from ckanext.nfwf_permissions.logic import action
+
+        old, new = factories.Group(), factories.Group()
+        grant = self._grant_in(old[u'id'])
+        monkeypatch.setattr(search, u'rebuild', lambda *a, **kw: (
+            _ for _ in ()).throw(search.SearchIndexError(u'solr is down')))
+        self._move(grant[u'id'], new[u'id'])
+
+        with app.flask_app.test_request_context():
+            action._reindex_if_program_changed({u'id': grant[u'id']},
+                                               old[u'id'])
+            from flask import get_flashed_messages
+            flashed = get_flashed_messages()
+
+        assert any(u'could not be reindexed' in m for m in flashed), flashed
+        assert any(u'search-index rebuild' in m for m in flashed), flashed
+
+    def test_warning_the_administrator_is_skipped_off_request(
+            self, monkeypatch, caplog):
+        """CLI and API callers have no session to flash into.
+
+        The other tests in this class already run outside a request context,
+        so they would catch a hard failure; this one says that is the point
+        rather than an accident of how they are written, and that the log
+        still gets the remedy when there is nobody to show it to.
+        """
+        from ckan.lib import search
+        from ckanext.nfwf_permissions.logic import action
+
+        old, new = factories.Group(), factories.Group()
+        grant = self._grant_in(old[u'id'])
+        monkeypatch.setattr(search, u'rebuild', lambda *a, **kw: (
+            _ for _ in ()).throw(search.SearchIndexError(u'solr is down')))
+        self._move(grant[u'id'], new[u'id'])
+
+        import flask
+        assert not flask.has_request_context()
+        action._reindex_if_program_changed({u'id': grant[u'id']}, old[u'id'])
+
+        assert u'search-index rebuild' in caplog.text
 
     def test_a_successful_move_still_reindexes_and_commits(self, monkeypatch):
         from ckan.lib import search
