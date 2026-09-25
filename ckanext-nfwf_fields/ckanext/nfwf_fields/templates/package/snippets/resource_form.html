@@ -148,7 +148,6 @@
 
     <script type="text/javascript">
       document.addEventListener('DOMContentLoaded', function() {
-        console.log('test 1!!!');
         // Get the visibility dropdown element
         var docTypeDropdown = document.getElementById('field-doc_type');
         // Get the rationale field div
@@ -156,7 +155,6 @@
         
         // Function to toggle the rationale field based on visibility selection
         function toggleDataLabelsSection() {
-          console.log('test 2!!!');
           if (docTypeDropdown.value === 'Monitoring Data') {
             dataLabelsSection.style.display = 'block';
           } else {
