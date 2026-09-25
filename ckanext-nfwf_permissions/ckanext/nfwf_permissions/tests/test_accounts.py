@@ -624,6 +624,27 @@ class TestOneRolePerUserUnderConcurrency(object):
     The barriers below do not invent a race. They force an interleaving the
     code permits, which is how you show a check-then-act window without
     relying on timing luck. `_lock_account` is what closes it.
+
+    **What the barrier does once the lock is in place, which is not what it
+    looks like.** Against the fixed code these barriers never trip. The first
+    thread takes the row lock inside `_assert_membership_is_allowed` and then
+    waits; the second blocks on that lock *before* reaching the barrier, so it
+    can never reach two participants. The wait ends in `BrokenBarrierError`,
+    which is caught and ignored, the first thread commits, and the second then
+    reads the committed row and refuses. So these tests pass because the
+    barrier *fails* -- the interleaving is forced only against the unfixed
+    code, which is how the defect was demonstrated in the first place.
+
+    That makes the timeout pure dead time on every run, which is why it is
+    short. Both threads reach the barrier in well under a second when the lock
+    is removed -- the whole suite fails in about four seconds in that state --
+    so five is already generous for the only case where the barrier does any
+    work. Raise it if these ever go flaky on a loaded machine; the cost is
+    that much idle time twice per run.
+
+    Both tests were confirmed discriminating on 2026-09-25 by disabling
+    `_lock_account`: both fail, on the assertion that the account ends up
+    holding both scopes.
     """
 
     @staticmethod
@@ -639,7 +660,7 @@ class TestOneRolePerUserUnderConcurrency(object):
 
     def test_two_membership_writes_cannot_both_land(self, world,
                                                     monkeypatch):
-        barrier = threading.Barrier(2, timeout=20)
+        barrier = threading.Barrier(2, timeout=5)
         original = action._assert_membership_is_allowed
 
         def checked_then_paused(context, group_ref, user_ref, capacity):
@@ -681,7 +702,7 @@ class TestOneRolePerUserUnderConcurrency(object):
         """The modal path. Both callers may succeed -- each replaces the lot,
         so last-writer-wins is the right answer -- but the account must end up
         in one of the two states they asked for, not a mixture of both."""
-        barrier = threading.Barrier(2, timeout=20)
+        barrier = threading.Barrier(2, timeout=5)
         original = action._apply_role
 
         def paused_then_applied(context, user, role, programs, grants):
