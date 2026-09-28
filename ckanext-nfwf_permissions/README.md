@@ -451,27 +451,39 @@ Error paths:
    filters them out on its own, so the endpoint returns nothing for that group
    -- the frontend has to know an absent group is correct here and not a
    loading failure. `migration.orphan_grants` identifies exactly this set.
-2. **Minimum one assignment.** `nfwf_user_role_set` currently *requires* at least
-   one program for a program role and one grant for `grant_editor`, on the
-   grounds that a Program Administrator of no programs has no permissions and is
-   almost certainly a UI slip. Assumption, not a stated requirement — easy to
-   relax.
-3. **Reactivating a deactivated account.** Not in the mockups. If the ellipsis
-   menu needs it, it is a one-line addition (`nfwf_user_reactivate`).
-4. **Program Administrator scope for the user table** — implemented 2026-09-22;
-   see [Authorization](#authorization). Two readings of it are still open and
-   both are one-line changes in `roles.py`: whether a Program Administrator may
-   appoint a *peer* Program Administrator (currently **no**, the narrower reading
-   — the document names only Grant Editor and Program Reader), and whether they
-   should see accounts that hold no assignment yet (currently **yes**, because
-   otherwise they can never give anyone a first role).
-5. **Which status transitions are legal?** Nothing currently stops
-   `nfwf_user_reject` on an account that has been active for a year, or
-   `nfwf_user_approve` on one that was already approved. Rejection reads like it
-   is meant for *requests*, so rejecting a long-active account is plausibly a
-   misclick that should be a deactivation instead. Needs a decision from the product owner
-   before the real implementation enforces anything; until then the API accepts
-   any of them.
+
+---
+
+## Settled
+
+Answered by the product owner on 2026-09-28. Recorded here so the reasoning
+survives, and so nothing in the code still reads as awaiting a decision.
+
+| Question | Answer | Where it lives |
+|---|---|---|
+| May a Program Administrator appoint a peer Program Administrator? | **No.** The document reserves peer appointment to Platform Administrators with an explicit parenthetical and says nothing of the kind for Program Administrators; naming it in one place and not the other excludes it. | `roles.PROGRAM_ADMIN_ASSIGNABLE_ROLES` |
+| Do Program Administrators see accounts holding no role yet? | **Yes.** Otherwise they could never give anyone a first role, which is a permission the document grants them. | `roles.is_within_scope` |
+| Must a role assignment carry at least one program or grant? | **Yes.** A role with no assignment confers nothing, so saving one is a UI slip. | `action._check_assignment_scope` |
+| Do Program Administrators read private datasets in *every* program? | **Yes**, as the document asks -- and knowingly including the part the document cannot have weighed: it applies automatically to any future program the moment a grant is filed under it. | `labels.IN_ANY_PROGRAM` |
+| Should an out-of-scope account answer 404 rather than 403? | **Yes.** A 403 confirms the account exists, and this screen is a list of real names and email addresses. | `action._assert_within_scope` |
+| What may `nfwf_user_reject` act on? | **Accounts awaiting review only.** It used to accept any account, which made it an irreversible way to close a long-active one. | `action.nfwf_user_reject` |
+| Can a deactivated account be reopened? | **Yes** -- `nfwf_user_reactivate`, added for this. Deactivation used to be one-way. | `action.nfwf_user_reactivate` |
+| Should `reactivate` also undo a rejection? | **No.** Reopening a rejected *request* is approving it, and `nfwf_user_approve` already does that -- keeping them separate keeps the audit trail legible about why an account is open. | `action.nfwf_user_reactivate` |
+
+### The account status machine
+
+| Action | From | To |
+|---|---|---|
+| `nfwf_user_approve` | anything | Active |
+| `nfwf_user_reject` | Needs Review **only** | Account request rejected |
+| `nfwf_user_deactivate` | anything | Deactivated |
+| `nfwf_user_reactivate` | Deactivated **only** | Active |
+
+`approve` and `deactivate` stay unrestricted deliberately: `approve` is how a
+rejected *request* is let in after a second look, and `deactivate` has to work
+on anything that can currently be used. `reactivate` is deliberately not a way
+to undo a rejection -- letting a rejected request in is approving it, and
+`approve` leaves the right word in the audit trail.
 
 ## What else is in here
 

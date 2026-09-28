@@ -31,6 +31,7 @@ __all__ = [
     u'nfwf_user_approve',
     u'nfwf_user_reject',
     u'nfwf_user_deactivate',
+    u'nfwf_user_reactivate',
     u'nfwf_role_options',
     # Chained core actions. Real, not stubs -- see the bottom of this file.
     u'organization_create',
@@ -292,7 +293,14 @@ def nfwf_user_approve(context, data_dict):
 
 
 def nfwf_user_reject(context, data_dict):
-    """Reject an account request.
+    """Reject an account request. Only an account awaiting review.
+
+    Confirmed 2026-09-28: rejection is for *requests*, so it applies to
+    ``needs_review`` and nothing else. It used to accept any account, which
+    made it an irreversible way to close a long-active one -- the status went
+    straight to ``rejected`` and CKAN's state to ``deleted``, and until
+    ``nfwf_user_reactivate`` existed there was no way back through this API.
+    Use ``nfwf_user_deactivate`` to close an account that was genuinely in use.
 
     :param id: user id or name
     :type id: string
@@ -300,7 +308,8 @@ def nfwf_user_reject(context, data_dict):
     :rtype: the updated user dictionary, as returned by ``nfwf_user_list``
     """
     return _set_status(
-        context, data_dict, u'nfwf_user_reject', roles.STATUS_REJECTED)
+        context, data_dict, u'nfwf_user_reject', roles.STATUS_REJECTED,
+        from_statuses=[roles.STATUS_NEEDS_REVIEW])
 
 
 def nfwf_user_deactivate(context, data_dict):
@@ -313,6 +322,39 @@ def nfwf_user_deactivate(context, data_dict):
     """
     return _set_status(
         context, data_dict, u'nfwf_user_deactivate', roles.STATUS_DEACTIVATED)
+
+
+def nfwf_user_reactivate(context, data_dict):
+    """Return a deactivated account to Active.
+
+    Added 2026-09-28. Deactivation used to be one-way: nothing in this API
+    could undo it, so closing the wrong account meant a sysadmin editing the
+    database. Each lifecycle action now has one direction:
+
+    ==================  =====================  ========================
+    Action              From                   To
+    ==================  =====================  ========================
+    ``approve``         anything               Active
+    ``reject``          Needs Review only      Account request rejected
+    ``deactivate``      anything               Deactivated
+    ``reactivate``      Deactivated only       Active
+    ==================  =====================  ========================
+
+    Deliberately **not** a way to undo a rejection, CONFIRMED 2026-09-28. A
+    rejected account is a rejected *request*, and letting it in is approving
+    it -- which is what ``nfwf_user_approve`` is for, and which leaves the
+    right word in the audit trail. Restricting this to Deactivated keeps the
+    two paths distinct, and keeps the reason an account is open legible
+    afterwards.
+
+    :param id: user id or name
+    :type id: string
+
+    :rtype: the updated user dictionary, as returned by ``nfwf_user_list``
+    """
+    return _set_status(
+        context, data_dict, u'nfwf_user_reactivate', roles.STATUS_ACTIVE,
+        from_statuses=[roles.STATUS_DEACTIVATED])
 
 
 # -- Internals ---------------------------------------------------------------
@@ -404,11 +446,30 @@ def _validated(data_dict, action_schema, context):
     return data
 
 
-def _set_status(context, data_dict, action_name, new_status):
+def _set_status(context, data_dict, action_name, new_status,
+                from_statuses=None):
+    """Move one account to ``new_status``.
+
+    ``from_statuses`` restricts which statuses the move is legal from, and is
+    refused as a ``ValidationError`` rather than ``NotAuthorized``: the caller
+    is allowed to manage accounts, it is *this* account that is in the wrong
+    state, so the screen should say so on the row rather than imply the
+    account does not exist.
+    """
     toolkit.check_access(action_name, context, data_dict)
     data = _validated(data_dict, schema.nfwf_user_id_schema(), context)
 
     user = _user_or_404(data[u'id'])
+
+    if from_statuses is not None:
+        current = accounts.status_of(user)
+        if current not in from_statuses:
+            raise toolkit.ValidationError({u'id': [toolkit._(
+                u'This account is {0}. That action applies only to an '
+                u'account that is {1}.').format(
+                    roles.status_label(current),
+                    u' or '.join(roles.status_label(st)
+                                 for st in from_statuses))]})
     if new_status != roles.STATUS_ACTIVE:
         # Every status but Active stops the account being used, so closing the
         # last Platform Administrator's strands the site exactly as demoting
@@ -422,10 +483,10 @@ def _set_status(context, data_dict, action_name, new_status):
 def _check_assignment_scope(role, program_ids, grant_ids):
     """Enforce that assignments match what the role is assigned to.
 
-    ASSUMPTION, worth confirming: a program or grant role must carry at least
-    one assignment. A Program Administrator of no programs, or a Grant Editor of
-    no grants, has no permissions at all and is almost certainly a mistake in
-    the UI rather than something anyone wants to save.
+    CONFIRMED 2026-09-28: a program or grant role must carry at least one
+    assignment. A Program Administrator of no programs, or a Grant Editor of
+    no grants, has no permissions at all, so saving one is a mistake in the UI
+    rather than a state anyone wants.
     """
     errors = {}
     label = roles.ROLE_LABELS[role]

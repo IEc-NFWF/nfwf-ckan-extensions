@@ -138,11 +138,11 @@ class NfwfPermissionLabels(DefaultPermissionLabels):
         # grants Platform-Administrator-only territory. That follows the same
         # sentence: a grant under no program is not "under other programs".
         #
-        # Worth NFWF knowing that the breadth is automatic. A new program's
-        # private datasets become readable by every existing Program
-        # Administrator as soon as a grant is filed under it, with no
-        # per-program decision. The document intends this; nothing here
-        # re-asks the question.
+        # CONFIRMED 2026-09-28, including the part the document cannot have
+        # been weighing: the breadth is automatic. A new program's private
+        # datasets become readable by every existing Program Administrator as
+        # soon as a grant is filed under it, with no per-program decision.
+        # That was put to the product owner as a scale question and kept.
         if roles.programs_for_user(user_obj, [roles.CAPACITY_ADMIN]):
             labels.append(IN_ANY_PROGRAM)
 

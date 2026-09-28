@@ -426,6 +426,7 @@ class TestAuthorization(object):
         u'nfwf_user_approve',
         u'nfwf_user_reject',
         u'nfwf_user_deactivate',
+        u'nfwf_user_reactivate',
         u'nfwf_role_options',
     ]
 
@@ -440,14 +441,26 @@ class TestAuthorization(object):
 
     @pytest.mark.parametrize(u'action', ACTIONS)
     def test_sysadmin_is_allowed(self, action, population):
-        # A Platform Administrator is a CKAN sysadmin, and CKAN's sysadmin
-        # short-circuit runs before our auth functions. If this ever fails,
-        # something has added @auth_sysadmins_check -- see logic/auth.py.
-        helpers.call_action(
-            action,
-            context={u'user': population.sysadmin[u'name'],
-                     u'ignore_auth': False},
-            id=population.editor[u'name'], role=roles.PLATFORM_ADMIN)
+        """A Platform Administrator is a CKAN sysadmin, and CKAN's sysadmin
+        short-circuit runs before our auth functions. If this fails with
+        `NotAuthorized`, something has added `@auth_sysadmins_check` -- see
+        `logic/auth.py`.
+
+        `ValidationError` is accepted and is not a failure: it can only be
+        raised from inside the action body, which means `check_access` already
+        passed, which is the whole claim. `nfwf_user_reject` and
+        `nfwf_user_reactivate` both refuse on the *status* of the target
+        account, and this fixture's account is Active -- their status rules
+        are covered by `TestTheStatusStateMachine`, not here.
+        """
+        try:
+            helpers.call_action(
+                action,
+                context={u'user': population.sysadmin[u'name'],
+                         u'ignore_auth': False},
+                id=population.editor[u'name'], role=roles.PLATFORM_ADMIN)
+        except toolkit.ValidationError:
+            pass
 
 
 # -- The frozen response shapes ----------------------------------------------

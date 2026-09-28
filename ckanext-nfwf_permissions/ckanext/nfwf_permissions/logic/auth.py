@@ -90,6 +90,7 @@ __all__ = [
     u'nfwf_user_approve',
     u'nfwf_user_reject',
     u'nfwf_user_deactivate',
+    u'nfwf_user_reactivate',
     u'nfwf_role_options',
     # Core CKAN actions this extension takes over.
     u'package_create',
@@ -199,6 +200,10 @@ def nfwf_user_reject(context, data_dict=None):
 
 
 def nfwf_user_deactivate(context, data_dict=None):
+    return _platform_admin_only(context, data_dict)
+
+
+def nfwf_user_reactivate(context, data_dict=None):
     return _platform_admin_only(context, data_dict)
 
 

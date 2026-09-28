@@ -741,3 +741,132 @@ class TestOneRolePerUserUnderConcurrency(object):
         assert not roles.holds_both_scopes(world.user[u'name'])
         assert roles.user_role(world.user[u'name']) in (
             roles.GRANT_EDITOR, roles.PROGRAM_READER)
+
+
+@pytest.mark.usefixtures(u'clean_db', u'with_plugins')
+class TestTheStatusStateMachine(object):
+    """Which status each lifecycle action may act on.
+
+    Confirmed with the product owner 2026-09-28, after measuring that
+    `nfwf_user_reject` accepted *any* account: an account active for a year
+    could be rejected, which set CKAN's state to `deleted`, and nothing in
+    this API could undo it. Two changes came out of that -- reject is now
+    restricted to accounts awaiting review, and `nfwf_user_reactivate` exists.
+
+    ==================  =====================  ========================
+    Action              From                   To
+    ==================  =====================  ========================
+    ``approve``         anything               Active
+    ``reject``          Needs Review only      Account request rejected
+    ``deactivate``      anything               Deactivated
+    ``reactivate``      Deactivated only       Active
+    ==================  =====================  ========================
+
+    `approve` and `deactivate` stay unrestricted deliberately: approve is how
+    a rejected *request* is let in after a second look, and deactivate has to
+    work on anything that can currently be used.
+    """
+
+    def _sysadmins(self):
+        first = factories.Sysadmin()
+        factories.Sysadmin()  # so closing an account never strands the site
+        return {u'user': first[u'name'], u'ignore_auth': False}
+
+    def _status(self, user_id):
+        roles.clear_cache()
+        return accounts.status_of(model.User.get(user_id))
+
+    def test_reject_refuses_an_active_account(self):
+        """The defect this class exists for."""
+        ctx = self._sysadmins()
+        user = factories.User()
+
+        with pytest.raises(toolkit.ValidationError) as caught:
+            helpers.call_action(u'nfwf_user_reject', context=ctx,
+                                id=user[u'name'])
+
+        assert u'id' in caught.value.error_dict
+        assert self._status(user[u'id']) == roles.STATUS_ACTIVE, (
+            u'the refused reject must not have changed anything')
+
+    def test_reject_still_works_on_a_pending_account(self):
+        ctx = self._sysadmins()
+        user = factories.User()
+        helpers.call_action(u'nfwf_user_deactivate', context=ctx,
+                            id=user[u'name'])
+        accounts.set_status(dict(ctx), model.User.get(user[u'id']),
+                            roles.STATUS_NEEDS_REVIEW)
+        roles.clear_cache()
+
+        helpers.call_action(u'nfwf_user_reject', context=ctx,
+                            id=user[u'name'])
+
+        assert self._status(user[u'id']) == roles.STATUS_REJECTED
+
+    def test_reactivate_restores_a_deactivated_account(self):
+        ctx = self._sysadmins()
+        user = factories.User()
+        helpers.call_action(u'nfwf_user_deactivate', context=ctx,
+                            id=user[u'name'])
+        assert self._status(user[u'id']) == roles.STATUS_DEACTIVATED
+
+        helpers.call_action(u'nfwf_user_reactivate', context=ctx,
+                            id=user[u'name'])
+
+        assert self._status(user[u'id']) == roles.STATUS_ACTIVE
+        assert model.User.get(user[u'id']).state == u'active', (
+            u'CKAN state has to come back too, or the account still cannot '
+            u'log in')
+
+    def test_reactivate_refuses_a_rejected_account(self):
+        """Letting a rejected request in is approving it, and `approve` is
+        the action that leaves the right word in the audit trail."""
+        ctx = self._sysadmins()
+        user = factories.User()
+        accounts.set_status(dict(ctx), model.User.get(user[u'id']),
+                            roles.STATUS_REJECTED)
+        roles.clear_cache()
+
+        with pytest.raises(toolkit.ValidationError):
+            helpers.call_action(u'nfwf_user_reactivate', context=ctx,
+                                id=user[u'name'])
+
+        assert self._status(user[u'id']) == roles.STATUS_REJECTED
+
+    def test_reactivate_refuses_an_already_active_account(self):
+        ctx = self._sysadmins()
+        user = factories.User()
+
+        with pytest.raises(toolkit.ValidationError):
+            helpers.call_action(u'nfwf_user_reactivate', context=ctx,
+                                id=user[u'name'])
+
+    def test_approve_still_lets_a_rejected_request_in(self):
+        """The intended route back from a rejection."""
+        ctx = self._sysadmins()
+        user = factories.User()
+        accounts.set_status(dict(ctx), model.User.get(user[u'id']),
+                            roles.STATUS_REJECTED)
+        roles.clear_cache()
+
+        helpers.call_action(u'nfwf_user_approve', context=ctx,
+                            id=user[u'name'])
+
+        assert self._status(user[u'id']) == roles.STATUS_ACTIVE
+
+    def test_reactivate_is_platform_administrator_only(self):
+        """Account lifecycle stays closed to Program Administrators -- the
+        document lists "Approve new/remove user accounts" under Platform
+        Administrator alone."""
+        program = factories.Group()
+        padmin = factories.User()
+        helpers.call_action(u'group_member_create', id=program[u'id'],
+                            username=padmin[u'name'], role=u'admin')
+        target = factories.User()
+        roles.clear_cache()
+
+        with pytest.raises(toolkit.NotAuthorized):
+            helpers.call_action(
+                u'nfwf_user_reactivate',
+                context={u'user': padmin[u'name'], u'ignore_auth': False},
+                id=target[u'name'])

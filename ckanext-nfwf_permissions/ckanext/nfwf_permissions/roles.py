@@ -126,9 +126,14 @@ OWNER_GROUP_EXTRA = u'owner_group'
 #:
 #: The document names two -- "their program-associated grants" (Grant Editor)
 #: and "program reader" -- and is silent on whether they may appoint a *peer*
-#: Program Administrator. OPEN: this takes the narrower reading and leaves it
-#: out. Adding ``PROGRAM_ADMIN`` to this list is the whole change; the modal
-#: narrows itself from it, and `nfwf_user_role_set` refuses from it.
+#: Program Administrator. CONFIRMED 2026-09-28: they may not. The document
+#: reserves peer appointment to Platform Administrators with an explicit
+#: parenthetical, and says nothing of the kind here -- naming it in one place
+#: and not the other is the drafter excluding it, not overlooking it.
+#:
+#: Should that ever be revisited, adding ``PROGRAM_ADMIN`` to this list is the
+#: whole change; the modal narrows itself from it, and `nfwf_user_role_set`
+#: refuses from it.
 #:
 #: Platform Administrator is not listed and must never be: the document reserves
 #: "Assign user permissions (including other Platform Administrators)" to
@@ -650,11 +655,12 @@ def is_within_scope(subject, program_ids, grant_ids):
     may well fall inside it, and acting on one of those rows would let a Program
     Administrator demote the account that outranks them.
 
-    An account with **no assignment at all** is in scope. OPEN: the literal
-    reading of "sees their program" would exclude a fresh registration, but that
-    leaves a Program Administrator unable to give anyone a first role, which is
-    the thing the document asks them to do. To take the literal reading instead,
-    delete the two lines marked below -- the last rule then answers it.
+    An account with **no assignment at all** is in scope. CONFIRMED
+    2026-09-28. The literal reading of "sees their program" would exclude a
+    fresh registration, but that leaves a Program Administrator unable to give
+    anyone a first role, which is the thing the document asks them to do. To
+    take the literal reading instead, delete the two lines marked below -- the
+    last rule then answers it.
 
     Otherwise **every** assignment the subject holds has to fall inside the
     scope, not merely one of them. "Any" was tried first and was wrong twice
