@@ -31,6 +31,22 @@ def nfwf_user_list_schema():
     }
 
 
+def nfwf_grant_list_schema():
+    """Schema for ``nfwf_grant_list``."""
+    ignore_missing = toolkit.get_validator(u'ignore_missing')
+    unicode_safe = toolkit.get_validator(u'unicode_safe')
+    natural_number = toolkit.get_validator(u'natural_number_validator')
+    boolean_validator = toolkit.get_validator(u'boolean_validator')
+
+    return {
+        u'q': [ignore_missing, unicode_safe],
+        u'program_id': [ignore_missing, unicode_safe],
+        u'unassigned': [ignore_missing, boolean_validator],
+        u'limit': [ignore_missing, natural_number],
+        u'offset': [ignore_missing, natural_number],
+    }
+
+
 def nfwf_user_id_schema():
     """Schema for the actions that take nothing but a user id."""
     not_empty = toolkit.get_validator(u'not_empty')

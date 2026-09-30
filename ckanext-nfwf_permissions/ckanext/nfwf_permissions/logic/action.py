@@ -33,6 +33,7 @@ __all__ = [
     u'nfwf_user_deactivate',
     u'nfwf_user_reactivate',
     u'nfwf_role_options',
+    u'nfwf_grant_list',
     # Chained core actions. Real, not stubs -- see the bottom of this file.
     u'organization_create',
     u'organization_update',
@@ -202,6 +203,82 @@ def nfwf_role_options(context, data_dict):
             u'assigned_to': roles.ROLE_SCOPE[role],
         } for role in offered],
         u'programs': programs,
+    }
+
+
+def nfwf_grant_list(context, data_dict):
+    """Grants for the Manage Roles modal's Grant Editor picker.
+
+    US 0126 slide 5 asks for the grants "by program", ten at a time behind a
+    scroll bar. The split is: **this pages, the frontend groups.** Every record
+    already carries ``program_id``, and the modal already has the program list
+    from ``nfwf_role_options``, so a nested response would only re-encode what
+    the flat one says. What the frontend cannot do for itself is page, because
+    the sizes are lopsided -- one program holds 487 of the site's 571 grants
+    against 41 and 12 for the other two. Paging a flat list would let a page
+    straddle two programs, and the screen could not then tell a finished group
+    from a truncated one. Per program, each group gets its own ``count`` and
+    its own "show more".
+
+    :param program_id: grants belonging to this program
+    :param unassigned: instead, grants belonging to no program at all
+    :param q: match against the grant's title or name
+    :param limit: page size, default 20, maximum 100
+    :param offset: rows to skip, default 0
+
+    :rtype: dictionary with ``count``, ``limit``, ``offset`` and ``results``,
+        each result carrying ``id``, ``name``, ``title`` and ``program_id``
+
+    ``unassigned`` answers the fourth "(no program)" group. It returns nothing
+    to a Program Administrator, and that is the whole point rather than a
+    limitation: a grant under no program is administered by nobody, so
+    ``_callers_scope`` excludes it. The screen should omit that group for them
+    rather than render it empty -- an absent group there is correct, not a
+    failed load.
+    """
+    toolkit.check_access(u'nfwf_grant_list', context, data_dict)
+    data = _validated(data_dict, schema.nfwf_grant_list_schema(), context)
+
+    if data.get(u'limit') == 0:
+        raise toolkit.ValidationError({u'limit': [toolkit._(
+            u'Must be at least 1.')]})
+    if data.get(u'program_id') and data.get(u'unassigned'):
+        raise toolkit.ValidationError({u'unassigned': [toolkit._(
+            u'Ask for one program or for the unassigned grants, not both.')]})
+
+    limit = min(data.get(u'limit', DEFAULT_LIMIT), MAX_LIMIT)
+    offset = data.get(u'offset', 0)
+    scope = _callers_scope(context)
+
+    if data.get(u'unassigned'):
+        wanted = accounts.unassigned_grant_ids()
+    elif data.get(u'program_id'):
+        program = roles.program_id(data[u'program_id'])
+        if program is None:
+            raise toolkit.ValidationError({u'program_id': [toolkit._(
+                u'"{0}" is not an active program.').format(
+                    data[u'program_id'])]})
+        wanted = set(roles.grants_in_program(program))
+    else:
+        wanted = None  # everything the caller may reach
+
+    if scope is None:
+        # Platform Administrator: no narrowing, so an unfiltered ask means
+        # every active grant.
+        if wanted is None:
+            wanted = {row[0] for row in model.Session.query(model.Group.id)
+                      .filter(model.Group.is_organization.is_(True),
+                              model.Group.state == u'active').all()}
+    else:
+        reachable = scope[1]
+        wanted = reachable if wanted is None else (wanted & reachable)
+
+    matches = accounts.search_grants(wanted, q=data.get(u'q'))
+    return {
+        u'count': len(matches),
+        u'limit': limit,
+        u'offset': offset,
+        u'results': matches[offset:offset + limit],
     }
 
 

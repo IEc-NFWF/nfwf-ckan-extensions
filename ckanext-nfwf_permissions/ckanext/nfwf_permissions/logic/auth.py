@@ -92,6 +92,7 @@ __all__ = [
     u'nfwf_user_deactivate',
     u'nfwf_user_reactivate',
     u'nfwf_role_options',
+    u'nfwf_grant_list',
     # Core CKAN actions this extension takes over.
     u'package_create',
     u'package_update',
@@ -188,6 +189,10 @@ def nfwf_user_role_set(context, data_dict=None):
 
 
 def nfwf_role_options(context, data_dict=None):
+    return _role_management(context, data_dict)
+
+
+def nfwf_grant_list(context, data_dict=None):
     return _role_management(context, data_dict)
 
 

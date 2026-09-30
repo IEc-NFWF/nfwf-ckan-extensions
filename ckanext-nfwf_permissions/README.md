@@ -317,7 +317,8 @@ Everything the modal needs to render its controls.
 Use `assigned_to` to drive the conditional part of the form: `program` shows the
 program checkboxes, `grant` shows the grant picker, `null` shows neither.
 
-Grants are deliberately **not** returned here — see the open questions.
+Grants are deliberately **not** returned here — there are 571 of them. Use
+`nfwf_grant_list` below, which pages per program.
 
 The response above is what a **Platform Administrator** gets. For a Program
 Administrator both lists are narrowed to what they may actually save: `roles`
@@ -325,6 +326,57 @@ drops Platform Administrator and Program Administrator, and `programs` contains
 only the programs they administer. Render whatever comes back rather than a
 hard-coded list of four — the modal is then correct for both callers without
 knowing which it is talking to, and `nfwf_user_role_set` refuses the rest anyway.
+
+### `nfwf_grant_list`
+
+The Grant Editor picker's grants. **This pages, you group.**
+
+```
+GET /api/3/action/nfwf_grant_list?program_id=<id>&limit=20&offset=0
+GET /api/3/action/nfwf_grant_list?unassigned=true
+GET /api/3/action/nfwf_grant_list?q=audubon
+```
+
+```json
+{
+  "count": 487,
+  "limit": 20,
+  "offset": 0,
+  "results": [
+    { "id": "fixture-grant-10001",
+      "name": "grant-10001-example-conservation-district",
+      "title": "Grant 10001 (Example Conservation District)",
+      "program_id": "fixture-program-ncrf" }
+  ]
+}
+```
+
+| Parameter | Meaning |
+|---|---|
+| `program_id` | grants belonging to that program |
+| `unassigned` | instead, grants belonging to no program |
+| `q` | match the grant's title or name |
+| `limit` / `offset` | default 20, maximum 100 |
+
+**Why per program rather than one flat list.** The sizes are lopsided — one
+program holds 487 of the 571 grants against 41 and 12 for the other two. A page
+of a flat list can straddle two programs, and the screen then cannot tell a
+finished group from a truncated one. Asking per program gives each group its own
+`count` and its own "show more", which is what US 0126 slide 5 describes.
+
+**Grouping is yours.** Every record carries `program_id`, and you already have
+the program list from `nfwf_role_options`, so a nested response would only
+re-encode what the flat one says.
+
+**The fourth "(no program)" group.** `unassigned=true` returns the grants that
+belong to no program. It returns nothing to a Program Administrator — a grant
+under no program is administered by nobody — so **omit that group for them
+rather than rendering it empty**. An absent group there is correct, not a
+failed load.
+
+Everything is narrowed to what the caller may actually assign, so a Program
+Administrator asking for another program's grants gets an empty list rather
+than a refusal.
 
 ### `nfwf_user_role_show`
 
@@ -420,57 +472,8 @@ Error paths:
 
 ## Open questions
 
-1. **Grant selection in the modal — not an open question, a gap.** This was
-   listed here as needing a UI decision. It does not: US 0126 slide 5 already
-   made it, and says
-
-   > If Grant Editor is selected, dynamically display the list of grants to
-   > select, **by program**. [...] Allow multiple selection via check-box.
-   > Display up to 10 grants. Include a scroll bar to see more.
-
-   `nfwf_role_options` returns `roles` and `programs` and deliberately omits
-   grants, on the stated grounds that roughly 570 of them "is not a checkbox
-   list". The mockup answers that objection directly — ten at a time behind a
-   scroll bar — so the reason does not hold, and the two alternatives suggested
-   here (`organization_autocomplete`, a paged `organization_list`) do not group
-   by program, which the slide requires.
-
-   What the modal needs and cannot currently get: grants, **grouped by
-   program**, paged. `ROLE_SCOPE` already tells the frontend *which* picker to
-   show (`grant` for Grant Editor), so only the data source is missing. Found
-   2026-09-25 sweeping the mockups; the earlier compliance pass checked the
-   four places the code cites a mockup and not the reverse direction, which is
-   how this stayed hidden.
-
-   **Sizing, which should shape the endpoint.** The problem is one program,
-   not the total:
-
-   | Program | Grants |
-   |---|---|
-   | National Coastal Resilience Fund | 487 |
-   | Emergency Coastal Resilience Fund | 41 |
-   | Hurricane Sandy Coastal Resiliency | 12 |
-   | *no program* | *31* |
-   | **total active grants** | **571** |
-
-   Two of the three groups render inline comfortably; only NCRF needs paging
-   or search. A uniformly paged endpoint is over-engineered for the other two.
-
-   **Decided 2026-09-25: orphan grants get a fourth "(no program)" group,
-   shown only to whoever can actually reach them.** The 31 grants with an
-   empty `owner_group` have no program heading to sit under. Excluding them
-   outright would mean nobody could assign a Grant Editor to any of them
-   through the modal -- a silent capability gap rather than a cosmetic choice
-   -- so a Platform Administrator sees them as their own group.
-
-   A Program Administrator does not, and the group should be **omitted for
-   them rather than rendered empty**. A grant under no program is administered
-   by nobody: `/organization/edit/<an orphan grant>` answers 403 to a Program
-   Administrator, measured against the snapshot, and `labels.py` already calls
-   orphan grants Platform-Administrator-only territory. `_callers_scope`
-   filters them out on its own, so the endpoint returns nothing for that group
-   -- the frontend has to know an absent group is correct here and not a
-   loading failure. `migration.orphan_grants` identifies exactly this set.
+*(none — the grant picker gap recorded here was closed on 2026-09-30 by
+`nfwf_grant_list`; the two decisions behind it are in Settled below.)*
 
 ---
 

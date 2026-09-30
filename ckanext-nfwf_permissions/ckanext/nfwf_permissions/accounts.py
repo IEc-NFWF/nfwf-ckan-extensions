@@ -17,7 +17,7 @@ Kept separate from ``logic/action.py`` so the actions stay a thin layer over
 this, and so the record shapes -- which are the contract Tasks 117 and 126 build
 against -- can be tested without going through authorization.
 """
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from ckan import model
 from ckan.logic import schema as core_schema
@@ -198,6 +198,58 @@ def programs():
         model.Group.state == u'active').all()
     return [group_record(group)
             for group in sorted(groups, key=lambda g: g.title or g.name)]
+
+
+def unassigned_grant_ids():
+    """Ids of active grants that resolve to no program.
+
+    The negative of ``roles._program_id_for_grant_id``, and deliberately the
+    same join: an ``owner_group`` extra that is active, whose value names a
+    group that is active and is not an organization. A grant fails it three
+    ways -- no extra at all, an empty value, or a value naming something that
+    is deleted or is itself a grant -- and all three mean the same thing to a
+    program role, which is that it cannot reach this grant.
+
+    One query rather than ``migration.orphan_grants``'s row-by-row loop,
+    because this one serves a picker on a screen.
+    """
+    has_program = model.Session.query(model.GroupExtra.group_id).join(
+        model.Group, model.Group.id == model.GroupExtra.value
+    ).filter(
+        model.GroupExtra.key == roles.OWNER_GROUP_EXTRA,
+        model.GroupExtra.state == u'active',
+        model.Group.state == u'active',
+        model.Group.is_organization.is_(False),
+    )
+    rows = model.Session.query(model.Group.id).filter(
+        model.Group.is_organization.is_(True),
+        model.Group.state == u'active',
+        ~model.Group.id.in_(has_program),
+    ).all()
+    return {row[0] for row in rows}
+
+
+def search_grants(grant_ids, q=None):
+    """Grant records for ``grant_ids``, optionally matching ``q``.
+
+    Sorted by title so a picker reads alphabetically. Returns every match --
+    the caller pages, the same arrangement as ``search_users`` and for the
+    same reason: the set is already bounded by the caller's scope.
+    """
+    if not grant_ids:
+        return []
+    query = model.Session.query(model.Group).filter(
+        model.Group.id.in_(list(grant_ids)),
+        model.Group.state == u'active',
+    )
+    if q:
+        pattern = u'%%%s%%' % q.strip().lower()
+        query = query.filter(or_(
+            func.lower(model.Group.title).like(pattern),
+            func.lower(model.Group.name).like(pattern),
+        ))
+    return [group_record(group)
+            for group in sorted(query.all(), key=lambda g: g.title or g.name)]
 
 
 def _groups_by_id(group_ids):

@@ -428,6 +428,7 @@ class TestAuthorization(object):
         u'nfwf_user_deactivate',
         u'nfwf_user_reactivate',
         u'nfwf_role_options',
+        u'nfwf_grant_list',
     ]
 
     @pytest.mark.parametrize(u'action', ACTIONS)
