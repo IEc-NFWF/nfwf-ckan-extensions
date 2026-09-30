@@ -10,10 +10,16 @@ NFWF user roles, permissions and account approval — **Task 125**.
 This exists so the user management screen and the Manage Roles modal are not
 blocked waiting on the roles backend.
 
-**Not yet enabled anywhere.** Add `nfwf_permissions` to `CKAN__PLUGINS` before
-any of it takes effect; see [Development](#development). Turning it on activates
-the permission matrix for every user at once, so it is worth doing as its own
-deliberate step.
+**Not deployed anywhere.** This extension exists only on the
+`task-125-roles-permissions` branch — it is on no branch that staging or
+production deploys, so nothing here describes a running system. Local
+development is the exception, where it is enabled and everything in this
+document applies.
+
+Two steps, not one: the branch has to reach a deployed environment, and
+`nfwf_permissions` has to be added to `CKAN__PLUGINS` there; see
+[Development](#development). The second activates the permission matrix for
+every user at once, so it is worth doing deliberately and on its own.
 
 ---
 
@@ -158,6 +164,20 @@ role stays a backend change.
 
 A user holds **exactly one** role. Grant Member and Grant Admin are retired and
 rejected if submitted.
+
+One role per user is a **conflict-of-interest control**, confirmed by the
+product owner in August 2026 — which is why the guards refuse the combination
+outright rather than resolving it silently.
+
+### How a grant knows its program
+
+Through the `owner_group` extra on the grant organization, holding the program
+group's id. Three things read it: the permission labels in `labels.py`, a
+Program Administrator's reach in `roles.administered_scope`, and the program
+facet `ckanext-nfwf_fields` builds at index time.
+
+A CKAN `Member` row joining one group to another is refused — see
+`_assert_no_group_hierarchy` for the hole that closes.
 
 | Status value | Label | Shown by default |
 |---|---|---|
