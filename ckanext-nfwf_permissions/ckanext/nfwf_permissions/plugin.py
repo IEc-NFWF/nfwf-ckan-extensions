@@ -37,7 +37,7 @@ class NfwfPermissionsPlugin(plugins.SingletonPlugin, NfwfPermissionLabels):
     ``cli.py``, using the ``__all__`` declared in each.
 
     ``IPermissionLabels`` is different: ``get_permission_labels`` returns the
-    plugin *object itself* and calls the label methods on it, so the behaviour
+    plugin *object itself* and calls the label methods on it, so the behavior
     has to be inherited rather than registered. ``NfwfPermissionLabels`` keeps
     that logic in its own module and testable on its own.
     """

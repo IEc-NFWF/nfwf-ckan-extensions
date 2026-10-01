@@ -466,7 +466,7 @@ class TestAuthorization(object):
 
 # -- The frozen response shapes ----------------------------------------------
 #
-# Tasks 117 and 126 build against these. The behaviour tests above check what
+# Tasks 117 and 126 build against these. The behavior tests above check what
 # the actions *do*; these check what they *return*, exactly, so a key cannot be
 # added, renamed or dropped without a deliberate change here and a conversation
 # with whoever is building the screens.

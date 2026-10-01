@@ -1,5 +1,5 @@
 # encoding: utf-8
-"""Analyse existing role assignments against the new role model.
+"""Analyze existing role assignments against the new role model.
 
 Produces the migration report the role redesign was deferred on: what the new
 model makes of every assignment that already exists, and which ones a person

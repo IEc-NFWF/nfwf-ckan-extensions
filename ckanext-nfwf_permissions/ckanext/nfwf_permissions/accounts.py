@@ -137,7 +137,7 @@ def patch(context, user, **fields):
     with "Must be purely lowercase alphanumeric (ascii) characters and these
     symbols: -_" and nothing is written.
 
-    That is CKAN's behaviour on legacy data rather than anything this extension
+    That is CKAN's behavior on legacy data rather than anything this extension
     introduced -- ``user_patch`` fails identically when ``name`` is omitted and
     when ``ignore_auth`` is passed -- but it fails *here*, so it is fixed here.
     It went unnoticed because ``check_access`` runs before validation and

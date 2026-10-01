@@ -233,7 +233,7 @@ class TestGrants(object):
 class TestProgramsUseStockCkan(object):
     """Regression guards on the *absence* of an override.
 
-    If one of these fails, stock CKAN's behaviour has shifted and the
+    If one of these fails, stock CKAN's behavior has shifted and the
     "deliberately not overridden" list in ``logic/auth.py`` is out of date.
     """
 

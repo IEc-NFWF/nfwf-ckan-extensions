@@ -255,7 +255,7 @@ class TestPlatformAdministratorsCannotAllBeRemoved(object):
     """
 
     def test_the_last_one_cannot_be_demoted(self, last_admin):
-        """Defence in depth -- reachable through an internal context.
+        """Defense in depth -- reachable through an internal context.
 
         A caller who is not themselves a Platform Administrator cannot get
         here through the auth function; this guards the case where something
@@ -401,7 +401,7 @@ class TestListFilteringByGroup(object):
 
         # Holds both, so survives both filters.
         assert world.user[u'name'] in names
-        # Holds the program only. Under the old behaviour the grant filter was
+        # Holds the program only. Under the old behavior the grant filter was
         # dropped entirely and this user came back as well.
         assert in_program_only[u'name'] not in names
 

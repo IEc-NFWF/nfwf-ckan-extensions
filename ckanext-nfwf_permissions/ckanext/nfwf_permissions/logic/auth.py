@@ -393,7 +393,7 @@ def group_show(context, data_dict=None):
     because they *do* hold an ``admin`` row on the program itself and the
     membership check passes -- so this deliberately does not touch that path.
 
-    This only ever *adds* permission; every caller it does not recognise falls
+    This only ever *adds* permission; every caller it does not recognize falls
     through to stock. ``organization_show`` defers here
     (``ckan/logic/auth/get.py:174-175``), so the same widening applies to it,
     which is intended: the two describe the same object.

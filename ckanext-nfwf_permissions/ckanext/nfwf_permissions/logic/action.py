@@ -1351,7 +1351,7 @@ def member_roles_list(original_action, context, data_dict):
     ``_assert_membership_is_allowed`` is the control, and this codebase has a
     standing rule that the UI is never the thing trusted to hide a role. Both
     read ``roles.GRANT_CAPACITIES`` / ``PROGRAM_CAPACITIES``, so changing what a
-    screen offers means changing what the model recognises, in one place.
+    screen offers means changing what the model recognizes, in one place.
 
     Chaining core's action rather than overriding the templates is deliberate.
     ``nfwf_theme`` already overrides both ``member_new.html`` files, so a second
@@ -1359,7 +1359,7 @@ def member_roles_list(original_action, context, data_dict):
     it would have to be written twice, once per screen, with the two copies free
     to drift. One chained action covers both screens and every other caller.
 
-    Unrecognised shapes pass through untouched: if a future CKAN returns
+    Unrecognized shapes pass through untouched: if a future CKAN returns
     something other than ``{'value': ..., 'text': ...}`` dictionaries, this
     filters nothing rather than silently emptying the dropdown.
     """

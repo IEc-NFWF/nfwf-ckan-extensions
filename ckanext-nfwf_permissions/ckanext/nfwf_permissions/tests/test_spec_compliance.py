@@ -463,7 +463,7 @@ class TestDualScopeAccountsAreOutOfReach(object):
 
     `is_within_scope` used to admit an account if *any* assignment intersected
     the scope, which leaked and also made the modal unusable. See its docstring
-    for both. These pin the behaviour that replaced it.
+    for both. These pin the behavior that replaced it.
     """
 
     @pytest.fixture
@@ -496,7 +496,7 @@ class TestDualScopeAccountsAreOutOfReach(object):
         """The trap, not just the disclosure.
 
         `nfwf_user_role_set` replaces assignments wholesale. Reachable-but-
-        unsavable was the old behaviour; now it is simply out of reach, so a
+        unsavable was the old behavior; now it is simply out of reach, so a
         Program Administrator cannot half-rewrite an account whose other half
         they cannot see.
         """

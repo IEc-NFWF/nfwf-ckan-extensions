@@ -194,7 +194,7 @@ programs while the queries underneath address `group` rows.
 
 Comments in this extension refer to decisions rather than restating them —
 "settled 2026-08-19", "accepted deliberately". Those refer to the Task 125
-design document and the Teams thread it summarises, which are **not in this
+design document and the Teams thread it summarizes, which are **not in this
 repository**. If you are reading a comment that leans on a decision you cannot
 find, ask the maintainers or the NFWF product owner; the substance is meant to be stated inline,
 so a missing reference should never leave you unable to follow the reasoning. If
@@ -262,7 +262,7 @@ Mockup column → response field:
 |---|---|
 | Name | `display_name` |
 | Email | `email` |
-| Status | `status_label` (colour off `status`) |
+| Status | `status_label` (color off `status`) |
 | Last Login | `last_login` |
 | Role | `role_label` — flag the row when `dual_scope` is true, see below |
 | Assigned Grants | `grants[].title`, as a bulleted list |
@@ -448,7 +448,7 @@ rows, or the `sysadmin` flag for Platform Administrator; a status change writes
 Responses are safe to swap straight into a table row, and a refresh now shows
 the same thing.
 
-Two behaviours worth knowing:
+Two behaviors worth knowing:
 
 - **A role change replaces, it does not add.** A user holds one role, so setting
   a program role clears any grant assignments and vice versa. Promoting someone
@@ -456,7 +456,7 @@ Two behaviours worth knowing:
   and simply not consulted, so demoting them restores what they had. The
   response says which case you are in via `assignments_in_effect`.
 - **A partial failure writes nothing.** One unknown id in `program_ids` fails
-  the whole call rather than saving the role with the ids it recognised.
+  the whole call rather than saving the role with the ids it recognized.
 
 Error paths:
 
