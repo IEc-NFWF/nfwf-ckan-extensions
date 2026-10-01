@@ -491,6 +491,7 @@ survives, and so nothing in the code still reads as awaiting a decision.
 | Should an out-of-scope account answer 404 rather than 403? | **Yes.** A 403 confirms the account exists, and this screen is a list of real names and email addresses. | `action._assert_within_scope` |
 | What may `nfwf_user_reject` act on? | **Accounts awaiting review only.** It used to accept any account, which made it an irreversible way to close a long-active one. | `action.nfwf_user_reject` |
 | Can a deactivated account be reopened? | **Yes** -- `nfwf_user_reactivate`, added for this. Deactivation used to be one-way. | `action.nfwf_user_reactivate` |
+| How many rows per page? | **A dropdown**, e.g. 5 / 10 / 20 / 50, as other table views do. Needs no API change -- all of those sit inside the 1-100 `nfwf_user_list` already accepts, and 20 stays the default per US 0117 slide 4. | `action.DEFAULT_LIMIT`, `MAX_LIMIT` |
 | Should `reactivate` also undo a rejection? | **No.** Reopening a rejected *request* is approving it, and `nfwf_user_approve` already does that -- keeping them separate keeps the audit trail legible about why an account is open. | `action.nfwf_user_reactivate` |
 
 ### The account status machine
