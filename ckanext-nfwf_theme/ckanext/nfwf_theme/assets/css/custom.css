@@ -1090,3 +1090,43 @@ a:hover, a:focus {
 .nav-tabs li a[href*="resource_data"] {
   display: none;
 }
+
+/* nfwfmain.css is Bootstrap 3, which reveals faded components with .in. CKAN 2.11 runs
+   Bootstrap 5, which adds .show instead, so every modal (the Delete confirmations among
+   them) opened at opacity 0 and silently blocked the page. */
+.fade.show {
+  opacity: 1;
+}
+.modal-backdrop.show {
+  opacity: 0.5;
+}
+.modal.show .modal-dialog {
+  transform: translate(0, 0);
+}
+
+/* Bootstrap 5's dialog close button draws its "x" with CSS that Bootstrap 3 lacks,
+   so it showed as a tiny empty button under the title. Icon from Bootstrap 5.1.3. */
+.modal-header {
+  position: relative;
+}
+.modal-header .btn-close {
+  position: absolute;
+  top: 50%;
+  right: 15px;
+  transform: translateY(-50%);
+  box-sizing: content-box;
+  width: 1em;
+  height: 1em;
+  padding: 0.25em;
+  border: 0;
+  border-radius: 0.25rem;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23000'%3e%3cpath d='M.293.293a1 1 0 011.414 0L8 6.586 14.293.293a1 1 0 111.414 1.414L9.414 8l6.293 6.293a1 1 0 01-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 01-1.414-1.414L6.586 8 .293 1.707a1 1 0 010-1.414z'/%3e%3c/svg%3e") center / 1em auto no-repeat;
+  cursor: pointer;
+  opacity: 0.5;
+}
+.modal-header .btn-close:hover,
+.modal-header .btn-close:focus {
+  opacity: 0.75;
+}
