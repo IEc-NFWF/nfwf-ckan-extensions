@@ -128,6 +128,8 @@
 {%- endblock -%}
 
 {%- block scripts %}
+    {% asset 'base/main' %}
+    {% asset 'base/ckan' %}
     {% if g.tracking_enabled %}
       {% asset 'base/tracking.js' %}
     {% endif %}

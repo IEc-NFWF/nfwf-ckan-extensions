@@ -18,96 +18,24 @@
   gtag('config', 'UA-172162518-1');
   </script>
 
-  <!-- Script to help render select2 -->
+  <!-- Restyle multi-selects once CKAN's modules (autocomplete among them) have set them up.
+       The modules themselves load from the base/ckan asset in page.html, and CKAN initializes
+       them exactly once; loading and initializing them again here duplicated every module. -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      var initializationComplete = false;
-      
-      // Wait for CKAN to be available
-      var checkCKAN = setInterval(function() {
-        if (window.ckan && window.ckan.module && typeof window.ckan.module.initialize === 'function') {
-          clearInterval(checkCKAN);
-          
-          // Load all modules in parallel
-          var moduleScripts = [
-            '/base/javascript/modules/autocomplete.js',
-            '/base/javascript/modules/basic-form.js',
-            '/base/javascript/modules/confirm-action.js',
-            '/base/javascript/modules/copy-into-buffer.js',
-            '/base/javascript/modules/custom-fields.js',
-            '/base/javascript/modules/data-viewer.js',
-            '/base/javascript/modules/dataset-visibility.js',
-            '/base/javascript/modules/image-upload.js',
-            '/base/javascript/modules/media-grid.js',
-            '/base/javascript/modules/metadata-button.js',
-            '/base/javascript/modules/resource-form.js',
-            '/base/javascript/modules/resource-reorder.js',
-            '/base/javascript/modules/resource-upload-field.js',
-            '/base/javascript/modules/resource-view-embed.js',
-            '/base/javascript/modules/resource-view-filters-form.js',
-            '/base/javascript/modules/resource-view-filters.js',
-            '/base/javascript/modules/resource-view-reorder.js',
-            '/base/javascript/modules/select-switch.js',
-            '/base/javascript/modules/slug-preview.js',
-            '/base/javascript/modules/table-selectable-rows.js',
-            '/base/javascript/modules/table-toggle-more.js'
-          ];
-          
-          var loadedCount = 0;
-          var totalModules = moduleScripts.length;
-          
-          moduleScripts.forEach(function(src) {
-            var script = document.createElement('script');
-            script.src = src;
-            script.onload = function() {
-              loadedCount++;
-              // console.log('Loaded:', src, '(' + loadedCount + '/' + totalModules + ')');
-              
-              // Initialize once when all modules are loaded
-              if (loadedCount === totalModules && !initializationComplete) {
-                initializationComplete = true;
-                
-                try {
-                  ckan.module.initialize();
-                  // console.log('CKAN modules initialized successfully');
-                  
-                  // Setup select2
-                  if (window.jQuery && jQuery.fn.select2) {
-                    jQuery('select[multiple]').each(function() {
-                      if (!jQuery(this).hasClass('select2-hidden-accessible')) {
-                        jQuery(this).select2({
-                          width: '100%',
-                          placeholder: 'Select options...',
-                          allowClear: true
-                        });
-                      }
-                    });
-                  }
-                } catch (error) {
-                  console.error('Initialization error:', error);
-                }
-              }
-            };
-            
-            // Log errors loading modules
-            script.onerror = function() {
-              console.warn('Failed to load:', src);
-              loadedCount++;
-              if (loadedCount === totalModules && !initializationComplete) {
-                initializationComplete = true;
-                try {
-                  ckan.module.initialize();
-                  console.log('CKAN modules initialized (with some failures)');
-                } catch (error) {
-                  console.error('Fallback initialization error:', error);
-                }
-              }
-            };
-            
-            document.head.appendChild(script);
+      if (!window.ckan || !ckan.module) return;
+      var initialize = ckan.module.initialize;
+      ckan.module.initialize = function() {
+        var result = initialize.apply(this, arguments);
+        if (window.jQuery && jQuery.fn.select2) {
+          jQuery('select[multiple]').select2({
+            width: '100%',
+            placeholder: 'Select options...',
+            allowClear: true
           });
         }
-      }, 100);
+        return result;
+      };
     });
   </script>
 
