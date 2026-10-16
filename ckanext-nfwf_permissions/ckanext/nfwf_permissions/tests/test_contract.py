@@ -620,21 +620,27 @@ class TestDualScopeIsVisible(object):
 
         assert all(u'dual_scope' in row for row in rows)
 
-    def test_it_asks_the_same_question_the_migration_does(self, population):
-        """The user table and `migrate-roles` must not disagree about which
-        accounts are affected.
+    def test_the_migrations_dual_set_is_contained_in_this_one(
+            self, population):
+        """The user table and `migrate-roles` must not drift apart silently.
 
         They are two implementations, not one. `roles.holds_both_scopes` asks
         per account; `migration.plan` builds a `scopes` set from its own bulk
         row scan, because it processes every account at once and a per-account
         query would be N+1. Nothing structural keeps them aligned -- add a
-        capacity filter to either and they drift apart silently -- so this
-        pins it instead.
+        capacity filter to either and they drift apart -- so this pins it.
 
-        The previous version of this test compared `dual_scope` against
-        `roles.holds_both_scopes`, which is the function that produces it
-        (`accounts.py`), and so could not fail for the reason its name gives.
-        This one runs the migration.
+        They were equal until 2026-10-02, when the migration began dropping
+        legacy program memberships instead of carrying them over. An account
+        holding one beside a grant is no longer the migration's problem -- the
+        rule settles it -- but it is still this function's, because until the
+        migration runs that account really does display the read-only role
+        while holding write access. So the contract is now containment, and
+        the difference is exactly those accounts.
+
+        The version of this test before that compared `dual_scope` against
+        `roles.holds_both_scopes`, the function that produces it, and so could
+        not fail for the reason its name gave. This one runs the migration.
         """
         _assign(population.program_a[u'id'], population.editor[u'name'],
                 roles.CAPACITY_MEMBER)
@@ -647,6 +653,7 @@ class TestDualScopeIsVisible(object):
             in account.get(u'reason', u'')}
 
         compared = 0
+        difference = set()
         for account in plan[u'accounts']:
             name = account[u'account']
             user = model.User.get(name)
@@ -657,12 +664,24 @@ class TestDualScopeIsVisible(object):
             if user is None or user.sysadmin:
                 continue
             compared += 1
-            assert roles.holds_both_scopes(user) == (
-                name in flagged_by_migration), (
-                    u'%s: holds_both_scopes=%s migration=%s' % (
-                        name, roles.holds_both_scopes(user),
-                        name in flagged_by_migration))
+            both = roles.holds_both_scopes(user)
+            if name in flagged_by_migration:
+                assert both, (
+                    u'%s: the migration calls it dual, this does not' % name)
+            elif both:
+                difference.add(name)
+
+        # Whatever the two disagree about must be a legacy program membership
+        # and nothing else, or one of them has drifted.
+        for name in difference:
+            user = model.User.get(name)
+            assert roles.programs_for_user(user) == roles.programs_for_user(
+                user, [roles.CAPACITY_MEMBER]), (
+                    u'%s is outside the migration\'s dual set for some reason '
+                    u'other than holding only legacy memberships' % name)
+
+        assert population.editor[u'name'] in difference, (
+            u'the editor was just given a program membership beside a grant, '
+            u'which is precisely the case the two are meant to differ on')
 
         assert compared, u'population produced nothing to compare'
-        assert population.editor[u'name'] in flagged_by_migration, (
-            u'the account just made dual-scope was not flagged')

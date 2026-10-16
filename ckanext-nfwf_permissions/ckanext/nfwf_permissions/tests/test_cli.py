@@ -8,6 +8,7 @@ other membership exactly as it was.
 import csv
 import io
 import os
+import tempfile
 
 import pytest
 from click.testing import CliRunner
@@ -17,6 +18,7 @@ import ckan.tests.helpers as helpers
 from ckan import model
 
 from ckanext.nfwf_permissions import cli, migration, roles
+from ckanext.nfwf_permissions.tests.test_cleanup import _replay
 
 
 def _assign(group_id, user_name, capacity):
@@ -53,6 +55,12 @@ class World(object):
         _assign(self.grant[u'id'], self.retired[u'name'],
                 roles.CAPACITY_MEMBER)
 
+        # Droppable for the other reason: a legacy program membership, held by
+        # an ordinary person rather than a service account.
+        self.old_reader = factories.User(name=u'old-program-member')
+        _assign(self.program[u'id'], self.old_reader[u'name'],
+                roles.CAPACITY_MEMBER)
+
 
 @pytest.fixture
 def world(clean_db):
@@ -60,8 +68,14 @@ def world(clean_db):
 
 
 def _run(*args, **kwargs):
+    args = list(args)
+    if u'--apply' in args and u'--undo-file' not in args:
+        # Out of the working directory. A run that writes nothing writes no
+        # undo file either, so this only ever lands on the applying tests.
+        args += [u'--undo-file',
+                 os.path.join(tempfile.mkdtemp(), u'undo.sql')]
     return CliRunner().invoke(cli.nfwf_permissions,
-                              [u'migrate-roles'] + list(args), **kwargs)
+                              [u'migrate-roles'] + args, **kwargs)
 
 
 @pytest.mark.usefixtures(u'with_plugins')
@@ -120,11 +134,34 @@ class TestApply(object):
         # The Platform Administrator's retired row is gone.
         assert roles.grants_for_user(service, [roles.CAPACITY_ADMIN]) == \
             frozenset()
-        # Everyone else is untouched.
+        # So is the real person's, since 2026-10-13: Grant Member is not a
+        # role in the new model and the product owner settled that these are
+        # removed rather than promoted.
+        assert roles.grants_for_user(retired, [roles.CAPACITY_MEMBER]) == \
+            frozenset()
+        # A real role is untouched.
         assert roles.grants_for_user(editor, [roles.CAPACITY_EDITOR]) == \
             frozenset([world.grant[u'id']])
-        assert roles.grants_for_user(retired, [roles.CAPACITY_MEMBER]) == \
-            frozenset([world.grant[u'id']])
+
+    def test_it_removes_a_legacy_membership_from_an_ordinary_account(
+            self, world):
+        """The second drop rule, which nearly shipped as a silent no-op.
+
+        ``--apply`` re-reads ``user.sysadmin`` before each delete, because the
+        first rule ("nothing to restore it to") only holds while the account
+        is still a Platform Administrator. Applied to this rule that check
+        would skip every row, since legacy memberships are by definition held
+        by ordinary people.
+        """
+        reader = model.User.get(world.old_reader[u'id'])
+        assert roles.programs_for_user(reader, [roles.CAPACITY_MEMBER])
+
+        result = _run(u'--apply', u'--yes')
+        assert result.exit_code == 0, result.output
+
+        assert roles.programs_for_user(reader, [roles.CAPACITY_MEMBER]) == \
+            frozenset()
+        assert u'skipped' not in result.output.lower(), result.output
 
     def test_it_removes_exactly_as_many_rows_as_it_promised(self, world):
         expected = migration.plan()[u'totals'][u'drop']
@@ -165,3 +202,58 @@ class TestApply(object):
 
         assert u'No search reindex is needed' in result.output
         assert u'owner_group' in result.output
+
+
+@pytest.mark.usefixtures(u'with_plugins')
+class TestUndoFile(object):
+    """``--apply`` soft deletes, which makes the data recoverable but not the
+    run: ``member`` has no timestamp, so afterwards nothing says which rows
+    this run flipped. The undo file is the only thing that does."""
+
+    def test_it_writes_one_statement_per_row_it_removed(self, world, tmpdir):
+        path = os.path.join(str(tmpdir), u'undo.sql')
+        expected = len(migration.droppable(migration.plan()))
+
+        result = _run(u'--apply', u'--yes', u'--undo-file', path)
+
+        assert result.exit_code == 0, result.output
+        script = io.open(path, encoding=u'utf-8').read()
+        assert script.count(u"UPDATE member SET state='active'") == expected
+        assert u'Undo script written to' in result.output
+
+    def test_the_script_puts_every_row_back(self, world, tmpdir):
+        path = os.path.join(str(tmpdir), u'undo.sql')
+        before = _memberships()
+
+        _run(u'--apply', u'--yes', u'--undo-file', path)
+        assert _memberships() != before
+
+        _replay(path)
+
+        assert _memberships() == before
+
+    def test_a_run_that_cannot_record_itself_does_not_start(self, world,
+                                                            tmpdir):
+        """The whole argument for applying these changes is that they can be
+        undone, so a run that cannot write its undo file must not happen."""
+        before = _memberships()
+        unwritable = os.path.join(str(tmpdir), u'no', u'such', u'undo.sql')
+
+        result = _run(u'--apply', u'--yes', u'--undo-file', unwritable)
+
+        assert result.exit_code != 0
+        assert _memberships() == before
+
+    def test_it_refuses_to_overwrite_an_existing_undo_file(self, tmp_path):
+        """migrate-roles must not erase the cleanup's undo file.
+
+        The two run back to back against the same database, so the second
+        being pointed at the first one's path is an easy slip.
+        """
+        path = os.path.join(str(tmp_path), u'undo.sql')
+        io.open(path, u'w', encoding=u'utf-8').write(u'-- an earlier run\n')
+
+        result = _run(u'--apply', u'--yes', u'--undo-file', path)
+
+        assert result.exit_code != 0
+        assert io.open(path, encoding=u'utf-8').read() == u'-- an earlier run\n'

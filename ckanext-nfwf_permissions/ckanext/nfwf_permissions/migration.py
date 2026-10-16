@@ -20,18 +20,35 @@ CKAN already stores -- Grant Editor *is* a grant ``editor`` row, Program Reader
 *is* a program ``member`` row, Program Administrator *is* a program ``admin``
 row. No row has to be rewritten into a new shape.
 
-What the data adds is where the volume actually sits, and the two halves have
-very different weights:
+One row is nonetheless removed rather than kept, and it is the commonest of
+all: the old **Program Member** role. It was handed out so that a dataset could
+be filed under a program, back when a user's assignments were the only link
+between a grant and its program; ``owner_group`` on the grant replaced that
+mechanism. The product owner settled on 2026-10-02 that the existing rows do
+not carry over. Program Reader itself survives -- it is still a program
+``member`` row -- but it is assigned deliberately from here, to the people who
+review a program's performance, rather than inherited from the stopgap.
+
+What the data adds is where the volume sits:
 
 * Most ``drop`` rows belong to a **handful of shared service accounts** -- the
   ones the redesign's pain points are about -- carrying retired grant ``admin``
-  capacities. That is why the migration is low-risk: those accounts are already
-  Platform Administrators, so removing the rows changes nothing they can do.
-  It is still a lot of rows, and ``--apply`` really does delete them.
-* Most ``decide`` rows belong to **accounts holding both a program and a grant
-  assignment**, which one-role-per-user cannot resolve on its own. This is the
-  real cost of the migration and it is measured in people, not rows: each one
-  is somebody who has to be asked which side they keep.
+  capacities, plus every legacy program membership. The service-account half is
+  why the migration is low-risk: those accounts are already Platform
+  Administrators, so removing the rows changes nothing they can do. It is a lot
+  of rows either way, and ``--apply`` really does delete them.
+* ``decide`` rows have one shape in practice: an account holding a Program
+  **Administrator** row alongside a grant, which one-role-per-user does not
+  allow. Two earlier sources of decisions have been settled and are rules now
+  -- a program membership beside a grant (a grantee with both is simply a
+  Grant Editor), and a retired grant capacity on a real person (removed; see
+  ``DROP_RETIRED_GRANT_ROLE``).
+
+  There is a second shape that no row in this database has: a capacity that
+  is neither the one kept nor one of the two retired. It is reported and
+  left alone rather than dropped, because every rule here is written for a
+  capacity somebody chose, and a value nobody has seen is a question, not a
+  row to delete under a reason that would not be true of it.
 
 Run the command for the current numbers rather than trusting any figure written
 down here.
@@ -41,17 +58,22 @@ Three dispositions, per assignment:
 ``keep``
     The row already expresses the right role. No write.
 ``drop``
-    A retired capacity held by an account that is already a Platform
-    Administrator. Safe to remove because there is nothing to restore it *to*:
-    the capacity no longer exists in the model, so retaining it -- which is the
-    rule for live capacities -- would preserve nothing.
+    One of three. A retired capacity held by an account that is already a
+    Platform Administrator -- safe because there is nothing to restore it
+    *to*, the capacity no longer existing in the model. A legacy program
+    membership, which the product owner decided does not carry over. Or a
+    retired grant capacity on a real person, which she decided on 2026-10-13
+    is removed rather than promoted.
 ``decide``
-    A human has to choose. A retired capacity on a real person, or an account
-    holding assignments of both scopes at once.
+    A human has to choose. An account holding a Program Administrator row
+    alongside a grant is the only shape left.
 
 And one per *account*, because "needs a decision" is not a property of a single
-row: an account holding both a program membership and grant editorships has to
-lose one side under one-role-per-user, no matter what each individual row says.
+row: an account administering a program while also editing a grant has to lose
+one side under one-role-per-user, whatever each individual row says. An account
+holding a program *membership* beside a grant used to be counted here too; now
+that the membership is dropped outright, the rule settles it and nobody is
+asked.
 """
 from ckan import model
 
@@ -61,11 +83,24 @@ KEEP = u'keep'
 DROP = u'drop'
 DECIDE = u'decide'
 
+#: Why a row is droppable, carried on the row because ``--apply`` has to tell
+#: them apart, and because the report has to be able to say which rule took
+#: a given person's access away.
+#:
+#: Only the first is re-checked at write time. It rests on the account still
+#: being a Platform Administrator -- a person can sit on the confirmation
+#: prompt, and a demotion in the meantime would change the answer. The other
+#: two rest on settled decisions about the roles themselves and hold whoever
+#: owns the account.
+DROP_RETIRED_ON_ADMIN = u'retired-capacity-on-platform-admin'
+DROP_LEGACY_MEMBERSHIP = u'legacy-program-membership'
+DROP_RETIRED_GRANT_ROLE = u'retired-grant-role'
+
 #: Column order for the CSV, so the report is diffable between runs.
 ASSIGNMENT_FIELDS = [
     u'account', u'account_state', u'is_platform_admin', u'account_disposition',
     u'scope', u'group_name', u'group_title', u'capacity', u'proposed_role',
-    u'disposition', u'note',
+    u'disposition', u'drop_rule', u'note',
 ]
 
 
@@ -87,36 +122,82 @@ def _assignment_rows():
 
 
 def _disposition(sysadmin, is_organization, capacity):
-    """What becomes of one row: ``(proposed_role, disposition, note)``."""
+    """What becomes of one row: ``(proposed_role, disposition, note, rule)``.
+
+    ``rule`` names the reason behind a ``drop`` and is ``None`` otherwise.
+    ``--apply`` needs it: the three drop rules rest on different things and
+    only one of them has to be re-checked at write time. See the ``DROP_*``
+    constants.
+    """
     if is_organization:
         if capacity == roles.CAPACITY_EDITOR:
             if sysadmin:
                 return (roles.GRANT_EDITOR, KEEP,
                         u'retained but not consulted while the account is a '
-                        u'Platform Administrator')
-            return roles.GRANT_EDITOR, KEEP, u''
+                        u'Platform Administrator', None)
+            return roles.GRANT_EDITOR, KEEP, u'', None
+        if capacity not in roles.RETIRED_GRANT_CAPACITIES:
+            # Not editor, and not one of the two retired capacities
+            # either. The drop below is written for Grant Member and
+            # Grant Admin and says so in its note; applying it to a
+            # capacity nobody has seen would delete the row and
+            # explain it with something untrue. `plan()` already
+            # counts only RETIRED_GRANT_CAPACITIES as retired, so
+            # without this the two disagree about what that means.
+            # Reported instead, and left exactly as it is -- the
+            # same answer the program branch below gives.
+            return (None, DECIDE,
+                    u'unexpected capacity on a grant: {0}'.format(
+                        capacity),
+                    None)
         # Grant admin and grant member are both retired.
         if sysadmin:
             return (None, DROP,
                     u'retired capacity, and the account is already a Platform '
-                    u'Administrator, so there is nothing to restore it to')
-        return (None, DECIDE,
-                u'retired capacity on a real account -- Grant Editor instead, '
-                u'or remove?')
+                    u'Administrator, so there is nothing to restore it to',
+                    DROP_RETIRED_ON_ADMIN)
+        # Until 2026-10-13 this was a decision, on the grounds that the row
+        # could become Grant Editor instead of nothing and only a person could
+        # say which. That restraint did its job: it is why the eight accounts
+        # holding these rows were put to the product owner at all, rather than
+        # 61 rows of access disappearing unremarked, 49 of them one person's.
+        # She answered for every one of them, and the answer was remove. So
+        # the rule now says what the new model says, which is that the
+        # capacity confers nothing because it does not exist.
+        return (None, DROP,
+                u'Grant Member and Grant Admin are not roles in the new '
+                u'model; the product owner settled on 2026-10-13 that these '
+                u'rows are removed rather than promoted to Grant Editor',
+                DROP_RETIRED_GRANT_ROLE)
+
+    if capacity == roles.CAPACITY_MEMBER:
+        # Program membership was a stopgap. It was handed out so a dataset
+        # could be filed under a program, back when a user assignment was the
+        # only link between the two; `owner_group` on the grant replaced that
+        # (see the module docstring). The product owner settled on 2026-10-02
+        # that no existing row carries over.
+        #
+        # This is not the retirement of Program Reader. That role survives and
+        # is still a program `member` row -- what ends is inheriting it from
+        # the old data. It gets assigned deliberately from here, to the people
+        # who review a program's performance.
+        return (None, DROP,
+                u'the old Program Member role was a stopgap and does not '
+                u'carry over; Program Reader is assigned deliberately instead',
+                DROP_LEGACY_MEMBERSHIP)
 
     if capacity == roles.CAPACITY_ADMIN:
         role = roles.PROGRAM_ADMIN
-    elif capacity == roles.CAPACITY_MEMBER:
-        role = roles.PROGRAM_READER
     else:
         return (None, DECIDE,
-                u'unexpected capacity on a program: {0}'.format(capacity))
+                u'unexpected capacity on a program: {0}'.format(capacity),
+                None)
 
     if sysadmin:
         return (role, KEEP,
                 u'retained but not consulted while the account is a Platform '
-                u'Administrator')
-    return role, KEEP, u''
+                u'Administrator', None)
+    return role, KEEP, u'', None
 
 
 def plan():
@@ -127,11 +208,20 @@ def plan():
     """
     rows = _assignment_rows()
 
+    # Each row is judged before the accounts are, because whether
+    # one-role-per-user has anything left to resolve is a question about the
+    # rows that *survive*. A legacy program membership is dropped outright, so
+    # it no longer puts its account in two scopes at once -- which is what
+    # used to make the holder a decision for somebody.
+    decided = [(row, _disposition(row[2], row[5], row[6])) for row in rows]
+
     scopes = {}
     retired = {}
-    for name, _state, _sysadmin, _gname, _gtitle, is_org, capacity in rows:
-        scopes.setdefault(name, set()).add(
-            u'grant' if is_org else u'program')
+    for row, (_role, disposition, _note, _rule) in decided:
+        name, _state, _sysadmin, _gname, _gtitle, is_org, capacity = row
+        held = scopes.setdefault(name, set())
+        if disposition != DROP:
+            held.add(u'grant' if is_org else u'program')
         if is_org and capacity in roles.RETIRED_GRANT_CAPACITIES:
             retired[name] = retired.get(name, 0) + 1
 
@@ -139,8 +229,8 @@ def plan():
     by_name = {account[u'account']: account for account in accounts}
 
     assignments = []
-    for name, state, sysadmin, gname, gtitle, is_org, capacity in rows:
-        role, disposition, note = _disposition(sysadmin, is_org, capacity)
+    for row, (role, disposition, note, rule) in decided:
+        name, state, sysadmin, gname, gtitle, is_org, capacity = row
         # An account-level decision overrides a row that looks fine on its own.
         account = by_name[name]
         if disposition == KEEP and account[u'disposition'] == DECIDE:
@@ -157,6 +247,7 @@ def plan():
             u'capacity': capacity,
             u'proposed_role': roles.role_label(role) or u'',
             u'disposition': disposition,
+            u'drop_rule': rule or u'',
             u'note': note,
         })
 
@@ -202,12 +293,17 @@ def _accounts(rows, scopes, retired):
                 u'consulted')
         elif dual:
             disposition, reason = DECIDE, (
-                u'holds both a program and a grant assignment, which '
-                u'one-role-per-user does not allow')
-        elif retired_rows:
-            disposition, reason = DECIDE, (
-                u'holds {0} row(s) with a retired grant capacity'.format(
-                    retired_rows))
+                u'holds a Program Administrator row and a grant assignment, '
+                u'which one-role-per-user does not allow')
+        elif not held:
+            # Not a decision -- the rules settle it -- but worth saying out
+            # loud, because an account that ends up holding nothing is easy to
+            # create by accident and impossible to notice in a total. The
+            # per-account count of retired rows is still reported, so the
+            # report can still say who lost what; it is no longer a question.
+            disposition, reason = KEEP, (
+                u'every row it holds is dropped by the migration, so the '
+                u'account is left with no role at all')
         else:
             disposition, reason = KEEP, u''
 
@@ -284,10 +380,19 @@ def _totals(assignments, accounts, orphans):
 
 
 def droppable(plan_data):
-    """The rows ``--apply`` would remove: retired capacities on sysadmins.
+    """The rows ``--apply`` would remove.
 
-    Deliberately the *only* thing a write touches. Every other disposition is
-    either already correct in storage or waiting on a human.
+    Three kinds, and deliberately the only things a write touches: retired
+    grant capacities on accounts that are already Platform Administrators,
+    the legacy program memberships, and retired grant capacities on real
+    people. Every other disposition is either already correct in storage or
+    waiting on a human.
+
+    The first is a tidy-up and costs its holders nothing. The other two take
+    something away from people who are using it -- the Program Affiliation
+    box on the dataset form, and read access to a grant's private datasets --
+    so both are decisions rather than tidy-ups, and both are recorded in the
+    module docstring and the README.
     """
     return [row for row in plan_data[u'assignments']
             if row[u'disposition'] == DROP]

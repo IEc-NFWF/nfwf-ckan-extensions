@@ -47,10 +47,20 @@ class World(object):
         _assign(self.program[u'id'], self.program_admin[u'name'],
                 roles.CAPACITY_ADMIN)
 
-        # Holds both scopes: the 116-account case.
+        # A program membership beside a grant: the 114-account case. The
+        # membership is dropped, so this resolves to Grant Editor by rule and
+        # is nobody's decision.
+        self.member_and_grant = factories.User(name=u'member-and-grant')
+        _assign(self.program[u'id'], self.member_and_grant[u'name'],
+                roles.CAPACITY_MEMBER)
+        _assign(self.grant[u'id'], self.member_and_grant[u'name'],
+                roles.CAPACITY_EDITOR)
+
+        # Holds both scopes in a way the rule cannot settle: administering a
+        # program while also editing a grant.
         self.dual = factories.User(name=u'dual-scope')
         _assign(self.program[u'id'], self.dual[u'name'],
-                roles.CAPACITY_MEMBER)
+                roles.CAPACITY_ADMIN)
         _assign(self.grant[u'id'], self.dual[u'name'],
                 roles.CAPACITY_EDITOR)
 
@@ -98,11 +108,55 @@ class TestDispositions(object):
         assert [row[u'disposition'] for row in rows] == [migration.KEEP]
         assert rows[0][u'proposed_role'] == u'Grant Editor'
 
-    def test_a_program_member_becomes_a_program_reader(self, world):
+    def test_the_old_program_member_role_is_dropped(self, world):
+        """Settled 2026-10-02: the stopgap does not carry over.
+
+        It used to become Program Reader, which would have handed every holder
+        program-wide read of private datasets the moment the model was
+        switched on -- the opposite of what the role is for.
+        """
         rows = _rows_for(migration.plan(), world.reader[u'name'])
 
-        assert rows[0][u'disposition'] == migration.KEEP
-        assert rows[0][u'proposed_role'] == u'Program Reader/Member'
+        assert rows[0][u'disposition'] == migration.DROP
+        assert rows[0][u'proposed_role'] == u''
+        assert u'stopgap' in rows[0][u'note']
+
+    def test_program_reader_itself_is_not_retired(self, world):
+        """Only the inheritance ends. The role is still in the model, and is
+        still what a program ``member`` row means once somebody assigns one."""
+        assert roles.PROGRAM_READER in roles.PROGRAM_ADMIN_ASSIGNABLE_ROLES
+        assert roles.role_label(roles.PROGRAM_READER)
+
+    def test_every_dropped_row_says_which_rule_dropped_it(self, world):
+        """``--apply`` branches on this, so the three must stay apart.
+
+        The retired-capacity rule holds only while the account is a Platform
+        Administrator and is re-checked before each delete; the other two do
+        not depend on the account at all. Deciding that from the row's scope
+        or its note would work today and break quietly the first time either
+        changes. The report needs the distinction for a second reason: two of
+        the three take access away from somebody, and it has to be able to
+        say which one did.
+        """
+        plan_data = migration.plan()
+        by_rule = {}
+        for row in migration.droppable(plan_data):
+            by_rule.setdefault(row[u'drop_rule'], set()).add(row[u'account'])
+
+        assert set(by_rule) == {migration.DROP_RETIRED_ON_ADMIN,
+                                migration.DROP_LEGACY_MEMBERSHIP,
+                                migration.DROP_RETIRED_GRANT_ROLE}
+        # Membership, not equality: CKAN's built-in ``default`` sysadmin is in
+        # this database too and carries rows of its own.
+        assert world.service[u'name'] in by_rule[
+            migration.DROP_RETIRED_ON_ADMIN]
+        assert world.reader[u'name'] in by_rule[
+            migration.DROP_LEGACY_MEMBERSHIP]
+        assert world.retired[u'name'] in by_rule[
+            migration.DROP_RETIRED_GRANT_ROLE]
+        assert all(row[u'drop_rule'] == u''
+                   for row in plan_data[u'assignments']
+                   if row[u'disposition'] != migration.DROP)
 
     def test_a_program_admin_becomes_a_program_administrator(self, world):
         rows = _rows_for(migration.plan(), world.program_admin[u'name'])
@@ -110,11 +164,48 @@ class TestDispositions(object):
         assert rows[0][u'disposition'] == migration.KEEP
         assert rows[0][u'proposed_role'] == u'Program Administrator'
 
-    def test_a_retired_capacity_on_a_real_person_needs_a_decision(self, world):
+    def test_a_retired_capacity_on_a_real_person_is_dropped(self, world):
+        """Was a decision until 2026-10-13, when the product owner settled
+        every one of them: removed, not promoted to Grant Editor."""
         rows = _rows_for(migration.plan(), world.retired[u'name'])
 
-        assert rows[0][u'disposition'] == migration.DECIDE
+        assert rows[0][u'disposition'] == migration.DROP
+        assert rows[0][u'drop_rule'] == migration.DROP_RETIRED_GRANT_ROLE
         assert rows[0][u'proposed_role'] == u''
+
+    def test_an_unexpected_capacity_on_a_grant_is_asked_about_not_dropped(
+            self, world):
+        """No row in the real data has one, and that is the point.
+
+        Every rule here is written for a capacity somebody chose. A value
+        nobody has seen cannot be dropped as "Grant Member and Grant Admin
+        are not roles in the new model", because that would not be true of
+        it -- so it is reported and the row is left alone.
+        """
+        stranger = factories.User(name=u'holds-something-odd')
+        _assign(world.grant[u'id'], stranger[u'name'], roles.CAPACITY_EDITOR)
+        model.Session.query(model.Member).filter(
+            model.Member.table_id == model.User.get(
+                stranger[u'name']).id,
+            model.Member.group_id == world.grant[u'id']).update(
+                {u'capacity': u'curator'})
+        model.Session.commit()
+
+        rows = _rows_for(migration.plan(), stranger[u'name'])
+
+        assert rows[0][u'disposition'] == migration.DECIDE
+        assert rows[0][u'drop_rule'] == u''
+        assert u'curator' in rows[0][u'note']
+
+    def test_an_account_left_holding_nothing_is_said_so_not_asked_about(
+            self, world):
+        """Its only row is dropped, so it ends up with no role. That is the
+        rule working, not a question for anybody."""
+        account = _account(migration.plan(), world.retired[u'name'])
+
+        assert account[u'disposition'] == migration.KEEP
+        assert u'left with no role' in account[u'reason']
+        assert account[u'retired_rows'] == 1
 
     def test_a_retired_capacity_on_a_platform_admin_is_dropped(self, world):
         rows = _rows_for(migration.plan(), world.service[u'name'])
@@ -136,12 +227,46 @@ class TestDispositions(object):
 @pytest.mark.usefixtures(u'with_plugins')
 class TestAccountLevelDecisions(object):
 
-    def test_a_dual_scope_account_needs_a_decision(self, world):
+    def test_administering_a_program_while_editing_a_grant_is_a_decision(
+            self, world):
         account = _account(migration.plan(), world.dual[u'name'])
 
         assert account[u'dual_scope'] is True
         assert account[u'disposition'] == migration.DECIDE
-        assert u'both a program and a grant' in account[u'reason']
+        assert u'Program Administrator row and a grant' in account[u'reason']
+
+    def test_a_program_membership_beside_a_grant_is_not_a_decision(
+            self, world):
+        """The large group, settled by the rule rather than by a person.
+
+        The membership is dropped and the grant row stands, so the account is
+        a Grant Editor and nobody has to be asked. Before the membership was
+        retired this was the single biggest source of decisions in the report.
+        """
+        plan_data = migration.plan()
+        account = _account(plan_data, world.member_and_grant[u'name'])
+
+        assert account[u'dual_scope'] is False
+        assert account[u'disposition'] == migration.KEEP
+
+        dispositions = {row[u'capacity']: row[u'disposition']
+                        for row in _rows_for(plan_data,
+                                             world.member_and_grant[u'name'])}
+        assert dispositions == {roles.CAPACITY_MEMBER: migration.DROP,
+                                roles.CAPACITY_EDITOR: migration.KEEP}
+
+    def test_an_account_left_with_no_role_says_so(self, world):
+        """Dropping the membership can empty an account out entirely.
+
+        Five accounts in the production snapshot are in this position on
+        2026-10-06, four of them active. It is not a decision -- the rule
+        settles it -- but a report that stayed silent about it would be hiding
+        the one surprising consequence.
+        """
+        account = _account(migration.plan(), world.reader[u'name'])
+
+        assert account[u'disposition'] == migration.KEEP
+        assert u'left with no role' in account[u'reason']
 
     def test_the_decision_propagates_to_every_row(self, world):
         """A row that looks fine alone is still contingent on the account."""
