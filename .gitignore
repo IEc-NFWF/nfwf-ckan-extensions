@@ -12,3 +12,9 @@ Desktop.ini
 *.save
 *.bak
 *.orig
+
+# One-off operational notes for the Task 125 role migration. These name real
+# people and their account decisions, so they stay out of this public repo
+# and are kept privately, beside the account lists they refer to.
+RUNBOOK.md
+rehearse.sh

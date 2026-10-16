@@ -269,9 +269,15 @@ Mockup column → response field:
 
 **`dual_scope` means the role shown is not the whole story.** The account holds
 both a program and a grant assignment, which one-role-per-user forbids and most
-of the existing data does anyway — `ckan nfwf-permissions migrate-roles` counts
-them, and it asks the same question this field answers, so the two cannot
-disagree.
+of the existing data does anyway.
+
+It is deliberately broader than the migration report's field of the same name,
+and the two are *supposed* to disagree. This one describes the data as it
+stands, so it counts any program row. The report describes what a migration
+would leave behind, and a legacy Program Member row is dropped rather than
+carried over, so it no longer puts an account in two scopes there. Until the
+migration is run this field is the one that matches what an administrator sees
+on the screen.
 
 It matters because `role` is resolved by precedence and names only one of the
 two. An account holding a program `member` row and a grant `editor` row reports
@@ -493,6 +499,8 @@ survives, and so nothing in the code still reads as awaiting a decision.
 | Can a deactivated account be reopened? | **Yes** -- `nfwf_user_reactivate`, added for this. Deactivation used to be one-way. | `action.nfwf_user_reactivate` |
 | How many rows per page? | **A dropdown**, e.g. 5 / 10 / 20 / 50, as other table views do. Needs no API change -- all of those sit inside the 1-100 `nfwf_user_list` already accepts, and 20 stays the default per US 0117 slide 4. | `action.DEFAULT_LIMIT`, `MAX_LIMIT` |
 | Should `reactivate` also undo a rejection? | **No.** Reopening a rejected *request* is approving it, and `nfwf_user_approve` already does that -- keeping them separate keeps the audit trail legible about why an account is open. | `action.nfwf_user_reactivate` |
+| Does an existing **Grant Member** or **Grant Admin** row become a Grant Editor? | **No** (2026-10-13). Neither capacity exists in the new model, which has no read-only role at grant level, so each row had to become Grant Editor or nothing. It was a `decide` until the product owner answered -- and the restraint earned its keep: it is why the eight accounts holding these 61 rows were put to her at all, 49 of them one person's, rather than the access vanishing unremarked. Her answer was remove, for every one. People who turn out to need the grant are added back to it. | `migration._disposition`, `migration.DROP_RETIRED_GRANT_ROLE` |
+| Does an existing **Program Member** row become a Program Reader? | **No** (2026-10-02). It was a stopgap: the role was handed out so a dataset could be filed under a program, back when a user's assignments were the only link between a grant and its program. `owner_group` replaced that, so the rows are dropped. Program Reader is not retired -- it is still a program `member` row -- but it is assigned deliberately from here, to the people who review a program, rather than inherited. | `migration._disposition`, `migration.DROP_LEGACY_MEMBERSHIP` |
 
 ### The account status machine
 
@@ -532,8 +540,56 @@ changing:
   required grant fields as Platform Administrators. `ckanext-nfwf_fields`
   consumes it through a soft import and falls back to sysadmin-only if this
   extension is not installed.
-- `ckan nfwf-permissions migrate-roles [--report CSV] [--apply]` — the role
-  migration report. Dry run by default.
+- `ckan nfwf-permissions migrate-roles [--report CSV] [--apply] [--undo-file
+  SQL]` — the role migration report. Dry run by default.
+- `ckan nfwf-permissions cleanup [--accounts FILE] [--grants FILE] [--apply]` —
+  closes accounts and deletes grants from a hand-written list. Dry run by
+  default. It decides nothing: the list is the product owner's. What it adds is
+  three refusals she cannot make from a spreadsheet — the site user named by
+  `ckan.site_id`, a grant that still holds datasets, and a program handed in
+  where a grant was meant — plus a warning on sysadmins and on anything signed
+  into in the last 90 days. It also clears the `sysadmin` flag when it closes
+  a Platform Administrator, which `user_delete` leaves set. See `cleanup.py`
+  for why each refusal is there.
+
+#### Applying these to a real database
+
+`MIGRATION.md` is the order to run the two commands in, what to check
+between steps, and how to reverse a run. `migrate-rehearse.sh` does the
+whole sequence against a throwaway copy first, including replaying the
+undo files to prove they restore the tables exactly.
+
+The account and grant lists both commands take are **not in this repo** --
+they name real people and the decisions made about their accounts. Ask the
+maintainer for the current pair.
+
+#### Undoing a run
+
+Everything both `--apply` paths write is a CKAN soft delete, so nothing is
+destroyed. That makes the data recoverable; it does not make the *run*
+recoverable, and the difference is the whole reason `undo.py` exists.
+
+`member` has no timestamp and no revision. Once a run has flipped several
+hundred rows to `state='deleted'`, nothing in the table distinguishes them
+from the rows that were already deleted before it started, so "put it back"
+has no answer unless the ids were written down first.
+
+So both commands write an undo script before they touch the database, and
+refuse to run if they cannot. It is a plain SQL file, one statement per line,
+no transaction — so a file cut short by a crash still applies as far as it
+got, and running it twice is harmless:
+
+    psql -U ckan -d ckan -f nfwf-undo-cleanup-20261013-142211.sql
+    ckan search-index rebuild
+
+Pass `--undo-file` to choose where it lands; the default is a timestamped
+name in the working directory, echoed at the end of the run.
+
+**One thing it cannot restore.** `user_delete` also removes the account's
+dataset collaborations, and `package_member` has no `state` column, so those
+rows are really deleted. Each one is written into the file as a comment
+naming what was lost, which is the most that can honestly be offered. There
+are none in the current data.
 
 - chained `member_roles_list` — narrows the Role dropdown on both stock member
   screens to the capacities the role model actually uses: Grant Editor on a
@@ -546,8 +602,8 @@ changing:
 ### Still to come
 
 - Nothing from the compliance pass. The four gaps it found against the redesign
-  document were closed on 2026-09-22; what is left is the two open readings in
-  [Open questions](#open-questions) 4, which need NFWF rather than code.
+  document were closed on 2026-09-22, and the readings that were still open
+  then have since been answered — see [Settled](#settled).
 
 ### Depends on `ckanext-oauth2`
 
