@@ -1,17 +1,3 @@
-.. You should enable this project on travis-ci.org and coveralls.io to make
-   these badges work. The necessary Travis and Coverage config files have been
-   generated for you.
-
-.. image:: https://travis-ci.org/abtassoc/ckanext-nfwf_theme.svg?branch=master
-    :target: https://travis-ci.org/abtassoc/ckanext-nfwf_theme
-
-.. image:: https://coveralls.io/repos/abtassoc/ckanext-nfwf_theme/badge.svg
-  :target: https://coveralls.io/r/abtassoc/ckanext-nfwf_theme
-
-.. image:: https://pypip.in/download/ckanext-nfwf_theme/badge.svg
-    :target: https://pypi.python.org/pypi//ckanext-nfwf_theme/
-    :alt: Downloads
-
 .. image:: https://pypip.in/version/ckanext-nfwf_theme/badge.svg
     :target: https://pypi.python.org/pypi/ckanext-nfwf_theme/
     :alt: Latest Version
@@ -90,8 +76,8 @@ Development Installation
 To install ckanext-nfwf_theme for development, activate your CKAN virtualenv and
 do::
 
-    git clone https://github.com/abtassoc/ckanext-nfwf_theme.git
-    cd ckanext-nfwf_theme
+    git clone https://github.com/IEc-NFWF/nfwf-ckan-extensions.git
+    cd nfwf-ckan-extensions/ckanext-nfwf_theme
     python setup.py develop
     pip install -r dev-requirements.txt
 

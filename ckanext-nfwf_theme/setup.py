@@ -21,11 +21,11 @@ setup(
     long_description=long_description,
 
     # The project's main homepage.
-    url='https://github.com/abtassoc/ckanext-nfwf_theme',
+    url='https://github.com/IEc-NFWF/nfwf-ckan-extensions',
 
     # Author details
-    author='''Abt Associates''',
-    author_email='''justin_stein@abtassoc.com''',
+    author='''Industrial Economics, Inc.''',
+    author_email='''jstrzepek@indecon.com''',
 
     # Choose your license
     license='AGPL',
