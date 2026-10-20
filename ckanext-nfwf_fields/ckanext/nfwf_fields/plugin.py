@@ -16,6 +16,11 @@ from urllib.parse import urlencode
 import re
 import threading
 
+try:
+    from ckanext.nfwf_fields import user_admin
+except ImportError:
+    user_admin = None
+
 _thread_state = threading.local()
 log = logging.getLogger(__name__)
 
@@ -542,6 +547,43 @@ def grant_admin_not_empty(key, data, errors, context):
     except ImportError:
         return sysadmin_not_empty(key, data, errors, context)
     return platform_or_program_admin_not_empty(key, data, errors, context)
+
+def _user_admin_helpers():
+    """The /user screen's helpers, or stand-ins if user_admin did not import.
+
+    Unlike the validators above, these cannot resolve the import at call time:
+    get_helpers binds them once at startup, so the decision is made here.
+
+    The stand-ins render the page's own unauthorized state rather than a
+    traceback. /user does not fully survive ckanext-nfwf_permissions being
+    absent -- user/list.html still calls check_access on the nfwf_user_*
+    actions, which are not registered without it -- so this is not the
+    independent deployability that can_admin_grant gets. It is the narrower
+    promise that one missing package costs you this screen and nothing else.
+    """
+    if user_admin is not None:
+        return {
+            'nfwf_user_admin_table': user_admin.user_admin_table,
+            'nfwf_user_status_class': user_admin.user_status_class,
+            'nfwf_manageable_roles': user_admin.manageable_roles,
+            'nfwf_role_scope_tree': user_admin.role_scope_tree,
+        }
+
+    def unavailable_table():
+        # The shape user/list.html reads, with authorized False so it shows the
+        # message it already has for that case.  Mirrors user_admin._empty_table.
+        return {
+            'rows': [], 'assignments': {}, 'page': None, 'q': '',
+            'include_deactivated': False, 'include_rejected': False,
+            'pager_params': {}, 'authorized': False, 'meta': {},
+        }
+
+    return {
+        'nfwf_user_admin_table': unavailable_table,
+        'nfwf_user_status_class': lambda status: '',
+        'nfwf_manageable_roles': lambda: [],
+        'nfwf_role_scope_tree': lambda: [],
+    }
 
 def required_for_new_resource(key, data, errors, context):
     # Require this resource field only for newly-added resources (which have no id yet)
@@ -1617,8 +1659,11 @@ class Nfwf_FieldsPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm, too
             'remove_grant_prefix': remove_grant_prefix,
             'facet_url_add': facet_url_add,
             'facet_url_remove': facet_url_remove,
+            # The /user administration screen.  Separate because they stand or
+            # fall together on ckanext-nfwf_permissions being importable.
+            **_user_admin_helpers(),
             }
-    
+
     def get_actions(self):
         return {
             'group_show':         _chained_group_show,

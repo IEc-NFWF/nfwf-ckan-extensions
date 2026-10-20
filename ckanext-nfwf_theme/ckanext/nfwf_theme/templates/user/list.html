@@ -1,0 +1,264 @@
+{#
+  User administration table.  Rendered by CKAN core's user.index view, which
+  still performs the check_access('user_list') gate -- this file only replaces
+  the markup.  All data comes from h.nfwf_user_admin_table(), defined in
+  ckanext-nfwf_fields/ckanext/nfwf_fields/user_admin.py.
+#}
+{% extends "page.html" %}
+
+{% set table = h.nfwf_user_admin_table() %}
+{# Gate on each action's own auth function rather than on 'sysadmin', so the page
+   follows nfwf_permissions rather than second-guessing it.  The two gates are
+   deliberately different: role assignment would admit a Program Administrator
+   scoped to their own program, while account status is Platform Administrator
+   only.  Checking them separately keeps the menu from offering an action the
+   viewer cannot take. #}
+{% set can_manage_roles = h.check_access('nfwf_user_role_set') %}
+{% set can_manage_accounts = h.check_access('nfwf_user_approve') %}
+
+{# Labels live here rather than in user_admin.py so they go through the template
+   catalogue like every other string on the page.  Keys come from
+   STATUS_ACTIONS; 'reactivate' calls nfwf_user_approve, which is the only action
+   that moves an account out of 'deleted'. #}
+{% set ui_labels = {
+     'approve': _('Approve'),
+     'reject': _('Reject'),
+     'deactivate': _('Deactivate'),
+     'reactivate': _('Reactivate'),
+     'dual_scope': _('and other assignments')
+   } %}
+
+{% block scripts %}
+  {{ super() }}
+  {% asset 'nfwf_fields/manage_roles_js' %}
+{% endblock %}
+
+{% block subtitle %}{{ _('Users') }}{% endblock %}
+
+{% block breadcrumb_content %}
+  <li class="active">{{ h.nav_link(_('Users'), named_route='user.index') }}</li>
+{% endblock %}
+
+{# The table needs all seven columns, so drop the sidebar and go full width.
+   Blanking secondary also makes page.html add its .no-nav wrapper class. #}
+{% block secondary %}{% endblock %}
+
+{% block primary %}
+  <div class="primary col-sm-12 col-xs-12">
+    <article class="module">
+      <header class="module-content page-header">
+        <ul class="nav nav-tabs">
+          {% block content_primary_nav %}
+            {{ h.build_nav('user.index', _('Users')) }}
+          {% endblock %}
+        </ul>
+      </header>
+      <div class="module-content">
+        {% block primary_content_inner %}
+          <h1 class="hide-heading">{{ _('Users') }}</h1>
+
+          {% block user_filters %}
+            <form class="nfwf-user-filters" method="get" action="{{ h.url_for('user.index') }}">
+              <div class="nfwf-user-filters-search">
+                <input type="text" name="q" class="form-control"
+                       value="{{ table.q }}" placeholder="{{ _('Search') }}"
+                       aria-label="{{ _('Search users') }}" />
+                <button type="submit" class="nfwf-user-filters-submit"
+                        aria-label="{{ _('Search') }}">
+                  <svg class="nfwf-user-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                    <line x1="10" y1="10" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="1.6"/>
+                  </svg>
+                </button>
+              </div>
+
+              {# Checkboxes submit the form on change; browsers omit unticked
+                 boxes from the query string, which is how the helper reads them. #}
+              <label class="nfwf-user-filters-toggle">
+                <input type="checkbox" name="include_deactivated" value="1"
+                       onchange="this.form.submit()"
+                       {{ 'checked' if table.include_deactivated }} />
+                {{ _('Include Deactivated Accounts?') }}
+              </label>
+
+              <label class="nfwf-user-filters-toggle">
+                <input type="checkbox" name="include_rejected" value="1"
+                       onchange="this.form.submit()"
+                       {{ 'checked' if table.include_rejected }} />
+                {{ _('Include Rejected Accounts?') }}
+              </label>
+            </form>
+          {% endblock %}
+
+          {% block user_table %}
+            {% if not table.authorized %}
+              {# Core's user_list gate lets more people reach this page than
+                 nfwf_permissions lets manage accounts, so say so plainly
+                 rather than showing an empty table. #}
+              <p class="empty">{{ _('You need to be a Platform Administrator to manage user accounts.') }}</p>
+            {% elif table.rows %}
+              {# Where a status action reports success or failure.  The row has no
+                 room -- the actions column is 3% wide -- and the modal's own note
+                 line belongs to the modal. #}
+              <p class="nfwf-user-notice" role="status" hidden></p>
+              <div class="nfwf-user-table-wrapper">
+                <table class="table table-striped table-bordered table-condensed nfwf-user-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">{{ _('Name') }}</th>
+                      <th scope="col">{{ _('Email') }}</th>
+                      <th scope="col">{{ _('Status') }}</th>
+                      <th scope="col">{{ _('Last Login') }}</th>
+                      <th scope="col">{{ _('Role') }}</th>
+                      <th scope="col">{{ _('Assigned Grants') }}</th>
+                      <th scope="col" aria-label="{{ _('Actions') }}"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in table.rows %}
+                      {# data-nfwf-user-row lets manage-roles.js find the row again
+                         after a status action, which returns a full table row and
+                         so can be applied in place rather than by reloading. #}
+                      <tr data-nfwf-user-row="{{ row.name }}">
+                        <th scope="row"><a href="{{ row.url }}">{{ row.display_name }}</a></th>
+                        <td>
+                          {% if row.email %}<a href="mailto:{{ row.email }}">{{ row.email }}</a>{% endif %}
+                        </td>
+                        <td data-nfwf-cell="status"><span class="{{ row.status_class }}">{{ row.status_label }}</span></td>
+                        <td>{{ row.last_login }}</td>
+                        {# A user holds at most one role, so this is plain text.
+                           dual_scope qualifies it: the account also holds
+                           assignments of the other kind, which the single label
+                           would otherwise understate. #}
+                        <td data-nfwf-cell="role">
+                          {{ row.role_label }}
+                          {% if row.dual_scope %}
+                            <span class="nfwf-user-dual-scope">{{ ui_labels.dual_scope }}</span>
+                          {% endif %}
+                        </td>
+                        <td data-nfwf-cell="grants">
+                          {# A Platform Administrator's grants are retained on the
+                             record but superseded by the sysadmin flag, so showing
+                             them here would imply they still apply. #}
+                          {% if row.grants and row.assignments_in_effect %}
+                            <ul class="nfwf-user-grants">
+                              {% for grant in row.grants %}
+                                <li><a href="{{ grant.url }}">{{ grant.title }}</a></li>
+                              {% endfor %}
+                            </ul>
+                          {% endif %}
+                        </td>
+                        <td class="nfwf-user-actions">
+                          {# Bootstrap's JS is not served on this site, so the menu is
+                             opened by the small vanilla-JS toggle at the foot of this
+                             template rather than by data-bs-toggle. #}
+                          <div class="dropdown nfwf-user-menu">
+                            <button type="button" class="nfwf-user-actions-toggle"
+                                    aria-haspopup="true" aria-expanded="false"
+                                    aria-label="{{ _('Actions for') }} {{ row.display_name }}">
+                              <svg class="nfwf-user-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                                <circle cx="8" cy="3" r="1.6" fill="currentColor"/>
+                                <circle cx="8" cy="8" r="1.6" fill="currentColor"/>
+                                <circle cx="8" cy="13" r="1.6" fill="currentColor"/>
+                              </svg>
+                            </button>
+                            <ul class="dropdown-menu nfwf-user-menu-list">
+                              {% if can_manage_roles %}
+                                <li>
+                                  <a class="dropdown-item" href="#"
+                                     data-nfwf-roles-user="{{ row.name }}"
+                                     data-nfwf-roles-display="{{ row.display_name }}">{{ _('Manage Roles') }}</a>
+                                </li>
+                              {% endif %}
+                              {# Which status actions suit this row is decided in
+                                 user_admin.STATUS_ACTIONS: the actions themselves
+                                 refuse nothing, so approving an already active
+                                 account would quietly succeed. #}
+                              {% if can_manage_accounts %}
+                                {% for action in row.actions %}
+                                  <li>
+                                    <a class="dropdown-item" href="#"
+                                       data-nfwf-status-user="{{ row.name }}"
+                                       data-nfwf-status-display="{{ row.display_name }}"
+                                       data-nfwf-status-action="{{ action.action }}"
+                                       data-nfwf-status-label="{{ ui_labels[action.key] }}">{{ ui_labels[action.key] }}</a>
+                                  </li>
+                                {% endfor %}
+                              {% endif %}
+                              {% if not can_manage_roles and not (can_manage_accounts and row.actions) %}
+                                <li><span class="dropdown-item disabled">{{ _('No actions available') }}</span></li>
+                              {% endif %}
+                            </ul>
+                          </div>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="empty">{{ _('No users found.') }}</p>
+            {% endif %}
+          {% endblock %}
+
+          {% block page_pagination %}
+            {% if table.page %}{{ table.page.pager(**table.pager_params) }}{% endif %}
+          {% endblock %}
+
+          {% block status_actions_data %}
+            {% if can_manage_accounts %}
+              {# A status action returns the row's new status, so rebuilding that
+                 row needs the same status-to-actions mapping and colours the
+                 server rendered from.  Passed through rather than restated in
+                 manage-roles.js -- see user_admin.STATUS_ACTIONS. #}
+              <script type="application/json" id="nfwf-user-table-meta">{{ table.meta|tojson }}</script>
+              <script type="application/json" id="nfwf-status-labels">{{ ui_labels|tojson }}</script>
+            {% endif %}
+          {% endblock %}
+
+          {% block manage_roles_modal %}
+            {% if can_manage_roles %}
+              {# One modal for the page; the launching menu item names the user. #}
+              {% snippet 'user/snippets/manage_roles_modal.html',
+                 roles=h.nfwf_manageable_roles(), tree=h.nfwf_role_scope_tree(),
+                 assignments=table.assignments %}
+            {% endif %}
+          {% endblock %}
+
+          {% block user_actions_script %}
+            {# Bootstrap's dropdown JS is not loaded on this site, so wire the
+               kebab menus up by hand.  Vanilla JS, matching facet-collapsible.js.
+               Delete this block if the core asset pipeline is ever restored. #}
+            <script>
+              (function () {
+                var menus = document.querySelectorAll('.nfwf-user-menu');
+                function closeAll(except) {
+                  Array.prototype.forEach.call(menus, function (menu) {
+                    if (menu === except) { return; }
+                    menu.classList.remove('is-open');
+                    menu.querySelector('.nfwf-user-actions-toggle')
+                        .setAttribute('aria-expanded', 'false');
+                  });
+                }
+                Array.prototype.forEach.call(menus, function (menu) {
+                  var toggle = menu.querySelector('.nfwf-user-actions-toggle');
+                  toggle.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    var open = menu.classList.toggle('is-open');
+                    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    closeAll(menu);
+                  });
+                });
+                document.addEventListener('click', function () { closeAll(null); });
+                document.addEventListener('keydown', function (event) {
+                  if (event.key === 'Escape') { closeAll(null); }
+                });
+              })();
+            </script>
+          {% endblock %}
+        {% endblock %}
+      </div>
+    </article>
+  </div>
+{% endblock %}

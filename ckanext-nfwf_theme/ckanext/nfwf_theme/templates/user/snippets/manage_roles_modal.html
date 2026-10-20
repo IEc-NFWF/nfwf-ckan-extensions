@@ -1,0 +1,103 @@
+{#
+  Manage Roles modal, launched from a row's kebab menu on /user.
+
+  Saving posts to nfwf_user_role_set in ckanext-nfwf_permissions, which owns the
+  role model.  The option values are role slugs and the checkbox values are
+  ids. Behaviour lives in ckanext-nfwf_fields/.../fanstatic/manage-roles.js, hand 
+  rolled because Bootstrap's JS is not served on this site.
+
+  Rendered once per page, not once per row: the launching menu item supplies the
+  target user via data attributes.
+
+  Vars:
+    roles       - h.nfwf_manageable_roles(), each {value, label, scope}
+    tree        - h.nfwf_role_scope_tree(), the programs, each {id, name, title}
+    assignments - {user name: {role, program_ids, grant_ids, grants}} for this
+                  page's rows
+#}
+
+{# Existing assignments for every row, so opening the modal can pre-select
+   without a round trip. #}
+<script type="application/json" id="nfwf-roles-assignments">{{ assignments|tojson }}</script>
+
+<div class="nfwf-roles-backdrop" hidden></div>
+
+<div class="nfwf-roles-modal" role="dialog" aria-modal="true"
+     aria-labelledby="nfwf-roles-title" hidden>
+  <div class="nfwf-roles-panel">
+
+    <div class="nfwf-roles-head">
+      <h2 class="nfwf-roles-title" id="nfwf-roles-title">{{ _('Manage Roles') }}</h2>
+      <button type="button" class="nfwf-roles-close" aria-label="{{ _('Close') }}">&times;</button>
+    </div>
+
+    <p class="nfwf-roles-subject">
+      {{ _('User') }}: <strong data-nfwf-roles-subject></strong>
+    </p>
+
+    <form class="nfwf-roles-form">
+      <div class="nfwf-roles-field">
+        <label for="nfwf-roles-select">{{ _('Role') }}:</label>
+        <select id="nfwf-roles-select" class="nfwf-roles-select form-control">
+          {# Same placeholder wording as the Grant Details program select. #}
+          <option value="">{{ _('--Please choose an option--') }}</option>
+          {% for role in roles %}
+            <option value="{{ role.value }}" data-scope="{{ role.scope }}">{{ role.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {# Shown only for scoped roles; Platform Administrator is site-wide. #}
+      <div class="nfwf-roles-scope" hidden>
+        <div class="nfwf-roles-search-wrap">
+          <input type="text" class="nfwf-roles-search form-control"
+                 placeholder="{{ _('Search') }}" autocomplete="off"
+                 aria-label="{{ _('Search programs and grants') }}" />
+          <svg class="nfwf-user-icon nfwf-roles-search-icon" viewBox="0 0 16 16"
+               aria-hidden="true" focusable="false">
+            <circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <line x1="10" y1="10" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="1.6"/>
+          </svg>
+        </div>
+
+        {# data-scope switches which picker shows; both are always in the DOM so
+           switching roles needs no re-render. #}
+        <div class="nfwf-roles-tree" data-scope="">
+
+          {# Programs: few enough to render up front and filter in the browser. #}
+          <ul class="nfwf-roles-programs">
+            {% for program in tree %}
+              <li class="nfwf-roles-program" data-title="{{ program.title|lower }}">
+                <div class="nfwf-roles-program-row">
+                  <label class="nfwf-roles-program-label">
+                    <input type="checkbox" class="nfwf-roles-check nfwf-roles-check-program"
+                           value="{{ program.id }}" />
+                    <span class="nfwf-roles-program-title">{{ program.title }}</span>
+                  </label>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+
+          {# Grants:  searched rather than listed.  Selections live above the results 
+            so changing the query cannot silently drop them. #}
+          <div class="nfwf-roles-grant-picker" hidden>
+            <ul class="nfwf-roles-grants nfwf-roles-grants-selected"></ul>
+            <ul class="nfwf-roles-grants nfwf-roles-grants-results"></ul>
+            <p class="nfwf-roles-hint">{{ _('Type to search grants by name.') }}</p>
+          </div>
+
+          <p class="nfwf-roles-empty" hidden>{{ _('No matching programs or grants.') }}</p>
+        </div>
+      </div>
+
+      <div class="nfwf-roles-foot">
+        <p class="nfwf-roles-note" role="status" hidden></p>
+        <div class="nfwf-roles-actions">
+          <button type="button" class="btn nfwf-roles-cancel">{{ _('Cancel') }}</button>
+          <button type="submit" class="btn nfwf-roles-save">{{ _('Save') }}</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
