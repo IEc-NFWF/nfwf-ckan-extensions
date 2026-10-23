@@ -227,7 +227,7 @@ def test_every_status_offers_at_least_one_action():
 
 def test_status_actions_name_only_contract_actions():
     allowed = {u'nfwf_user_approve', u'nfwf_user_reject',
-               u'nfwf_user_deactivate'}
+               u'nfwf_user_deactivate', u'nfwf_user_reactivate'}
     for actions in user_admin.STATUS_ACTIONS.values():
         for _key, action in actions:
             assert action in allowed
@@ -236,9 +236,9 @@ def test_status_actions_name_only_contract_actions():
 @pytest.mark.parametrize(u'status,expected', [
     (roles.STATUS_NEEDS_REVIEW, [u'nfwf_user_approve', u'nfwf_user_reject']),
     (roles.STATUS_ACTIVE, [u'nfwf_user_deactivate']),
-    # There is no nfwf_user_reactivate: approve is the only action that moves an
-    # account out of 'deleted' and clears the status marker.
-    (roles.STATUS_DEACTIVATED, [u'nfwf_user_approve']),
+    # reactivate accepts Deactivated only; offering it anywhere else would 409.
+    (roles.STATUS_DEACTIVATED, [u'nfwf_user_reactivate']),
+    # Letting a rejected request in is approving it, not reactivating it.
     (roles.STATUS_REJECTED, [u'nfwf_user_approve']),
 ])
 def test_row_offers_the_actions_its_status_allows(no_url_for, status, expected):

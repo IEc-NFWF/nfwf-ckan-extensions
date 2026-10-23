@@ -18,8 +18,8 @@
 
 {# Labels live here rather than in user_admin.py so they go through the template
    catalogue like every other string on the page.  Keys come from
-   STATUS_ACTIONS; 'reactivate' calls nfwf_user_approve, which is the only action
-   that moves an account out of 'deleted'. #}
+   STATUS_ACTIONS; 'reactivate' is for deactivated accounts only, and a rejected
+   one offers 'approve' instead. #}
 {% set ui_labels = {
      'approve': _('Approve'),
      'reject': _('Reject'),
@@ -185,7 +185,7 @@
                                 </li>
                               {% endif %}
                               {# Which status actions suit this row is decided in
-                                 user_admin.STATUS_ACTIONS: the actions themselves
+                                 user_admin.STATUS_ACTIONS: approve and deactivate
                                  refuse nothing, so approving an already active
                                  account would quietly succeed. #}
                               {% if can_manage_accounts %}
