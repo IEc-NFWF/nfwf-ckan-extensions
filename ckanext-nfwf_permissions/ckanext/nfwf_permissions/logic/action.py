@@ -206,6 +206,7 @@ def nfwf_role_options(context, data_dict):
     }
 
 
+@toolkit.side_effect_free
 def nfwf_grant_list(context, data_dict):
     """Grants for the Manage Roles modal's Grant Editor picker.
 
