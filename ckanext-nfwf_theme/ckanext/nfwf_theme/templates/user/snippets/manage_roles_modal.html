@@ -11,7 +11,8 @@
 
   Vars:
     roles       - h.nfwf_manageable_roles(), each {value, label, scope}
-    tree        - h.nfwf_role_scope_tree(), the programs, each {id, name, title}
+    tree        - h.nfwf_role_scope_tree(), the programs, each {id, name, title};
+                  drives both the program checkboxes and the grant groups
     assignments - {user name: {role, program_ids, grant_ids, grants}} for this
                   page's rows
 #}
@@ -79,12 +80,33 @@
             {% endfor %}
           </ul>
 
-          {# Grants:  searched rather than listed.  Selections live above the results 
-            so changing the query cannot silently drop them. #}
+          {# Grants:  too many to render up front, so grouped by program and
+            filled from nfwf_grant_list a page at a time -- it pages, we group.
+            Selections live above the groups so a new query cannot silently
+            drop them.  A group stays hidden until it has grants to show, which
+            is how "(no program)" is omitted for a Program Administrator: the
+            action returns them nothing there, by design. #}
           <div class="nfwf-roles-grant-picker" hidden>
             <ul class="nfwf-roles-grants nfwf-roles-grants-selected"></ul>
-            <ul class="nfwf-roles-grants nfwf-roles-grants-results"></ul>
-            <p class="nfwf-roles-hint">{{ _('Type to search grants by name.') }}</p>
+            <div class="nfwf-roles-grant-groups">
+              {% for program in tree %}
+                <section class="nfwf-roles-grant-group" data-program-id="{{ program.id }}" hidden>
+                  <h3 class="nfwf-roles-grant-group-title">
+                    {{ program.title }} <span class="nfwf-roles-grant-group-count"></span>
+                  </h3>
+                  <ul class="nfwf-roles-grants nfwf-roles-grants-results"></ul>
+                  <button type="button" class="nfwf-roles-grant-more" hidden>{{ _('Show more') }}</button>
+                </section>
+              {% endfor %}
+              <section class="nfwf-roles-grant-group" data-unassigned="true" hidden>
+                <h3 class="nfwf-roles-grant-group-title">
+                  {{ _('(no program)') }} <span class="nfwf-roles-grant-group-count"></span>
+                </h3>
+                <ul class="nfwf-roles-grants nfwf-roles-grants-results"></ul>
+                <button type="button" class="nfwf-roles-grant-more" hidden>{{ _('Show more') }}</button>
+              </section>
+            </div>
+            <p class="nfwf-roles-hint" hidden></p>
           </div>
 
           <p class="nfwf-roles-empty" hidden>{{ _('No matching programs or grants.') }}</p>

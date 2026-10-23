@@ -216,9 +216,8 @@ def manageable_roles():
 def role_scope_tree():
     """Programs for the Manage Roles modal, one row each.
 
-    Only programs: grants are picked through autocomplete instead of being
-    rendered as a checkbox tree, because production carries roughly 570 of them
-    and ``nfwf_role_options`` deliberately does not return them.
+    Only programs.  Grants are fetched from ``nfwf_grant_list`` a page at a time, 
+    one group per program in this same list.
 
     Returns a list of ``{'id', 'name', 'title'}``.  Programs with no grants are
     kept -- for the program-scoped roles the program itself is what gets picked.
@@ -314,8 +313,9 @@ def _row(record):
         # Consumed only by the Manage Roles modal, which is rendered for
         # Platform Administrators only -- see can_manage_roles in user/list.html.
         # Programs are all in the modal's list already, so ids are enough; the
-        # grant picker searches rather than lists, so it needs the titles of
-        # what is already assigned or it could not draw them.
+        # grant picker loads its groups a page at a time, so an assigned grant
+        # may not be on screen yet -- it needs the titles of what is already
+        # assigned or it could not draw them.
         'role_selection': {
             'role': role,
             'program_ids': [program['id'] for program in programs],

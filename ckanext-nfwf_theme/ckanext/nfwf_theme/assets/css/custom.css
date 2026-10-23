@@ -1147,6 +1147,24 @@ a:hover, a:focus {
   margin-right: 4px;
 }
 
+.nfwf-user-filters-limit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 0 auto;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Carries its own colon; see .nfwf-user-filters-toggle:after above. */
+.nfwf-user-filters-limit:after {
+  content: "";
+}
+
+.nfwf-user-filters-limit select {
+  width: auto;
+}
+
 /* Icons are inline SVG because Font Awesome is not served on this site. */
 .nfwf-user-icon {
   width: 16px;
@@ -1334,7 +1352,9 @@ a:hover, a:focus {
 .nfwf-roles-note[hidden],
 .nfwf-roles-empty[hidden],
 .nfwf-roles-program[hidden],
-.nfwf-roles-grant[hidden] {
+.nfwf-roles-grant[hidden],
+.nfwf-roles-grant-group[hidden],
+.nfwf-roles-grant-more[hidden] {
   display: none !important;
 }
 
@@ -1480,6 +1500,48 @@ body.nfwf-roles-open {
 
 .nfwf-roles-check {
   margin-right: 4px;
+}
+
+/* Grant picker: one group per program, each paged on its own. */
+.nfwf-roles-grant-group + .nfwf-roles-grant-group {
+  margin-top: 8px;
+}
+
+/* Same weight and color as the program checkboxes' labels. */
+.nfwf-roles-grant-group-title {
+  margin: 0 0 2px;
+  font-size: inherit;
+  font-weight: 700;
+  color: #8b9c21;
+}
+
+.nfwf-roles-grant-group-count {
+  font-weight: normal;
+  color: #666666;
+}
+
+.nfwf-roles-grant-group .nfwf-roles-grants-results {
+  padding-left: 12px;
+}
+
+/* A plain-button reset, as on .nfwf-roles-close, styled as a link. */
+.nfwf-roles-grant-more {
+  margin: 2px 0 0 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #206b82;
+  text-decoration: underline;
+}
+
+.nfwf-roles-grant-more:hover,
+.nfwf-roles-grant-more:focus {
+  color: #187794;
+}
+
+.nfwf-roles-grant-more:disabled {
+  color: #999999;
+  text-decoration: none;
 }
 
 .nfwf-roles-empty {

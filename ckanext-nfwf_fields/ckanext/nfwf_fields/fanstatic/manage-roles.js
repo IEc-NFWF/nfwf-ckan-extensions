@@ -7,13 +7,17 @@
  * they held rather than adding to it.
  *
  * Programs are rendered up front and filtered here -- there are a handful.
- * Grants are not: they are searched through organization_autocomplete and the chosen
- * ones are kept above the results so a new query cannot silently drop a selection.
+ * Grants are not: they are grouped by program and paged in from nfwf_grant_list,
+ * and the chosen ones are kept above the groups so a new query cannot silently
+ * drop a selection.
  */
 (function () {
   'use strict';
 
-  // Approve/reject/deactivate share the kebab menu with Manage Roles but not the
+  // Grants per group per request
+  var GRANT_PAGE = 10;
+
+  // The account status actions share the kebab menu with Manage Roles but not the
   // modal, and the two are gated on different auth functions -- account status is
   // Platform Administrator only, role assignment is not.  Wired before the guard
   // below so the menu keeps working on a page with no modal.  Reads ahead of its
@@ -36,16 +40,30 @@
   var programList = tree.querySelector('.nfwf-roles-programs');
   var grantPicker = tree.querySelector('.nfwf-roles-grant-picker');
   var grantSelected = tree.querySelector('.nfwf-roles-grants-selected');
-  var grantResults = tree.querySelector('.nfwf-roles-grants-results');
   var grantHint = tree.querySelector('.nfwf-roles-hint');
   var programs = toArray(tree.querySelectorAll('.nfwf-roles-program'));
+  // One per program, plus "(no program)", each paging on its own: the action
+  // pages, this groups.  The sections are rendered by the template.
+  var grantGroups = toArray(tree.querySelectorAll('.nfwf-roles-grant-group'))
+    .map(function (section) {
+      return {
+        section: section,
+        programId: section.getAttribute('data-program-id'),
+        unassigned: section.getAttribute('data-unassigned') === 'true',
+        list: section.querySelector('.nfwf-roles-grants-results'),
+        countLabel: section.querySelector('.nfwf-roles-grant-group-count'),
+        more: section.querySelector('.nfwf-roles-grant-more'),
+        offset: 0,
+        count: 0
+      };
+    });
 
   var lastFocus = null;
   var assignments = readAssignments();
   // The one role the open user holds: {role, program_ids, grant_ids, grants}.
   var current = emptyAssignment();
-  // Grants ticked in this session: id -> title.  Kept in JS because the results
-  // list is rebuilt on every keystroke.
+  // Grants ticked in this session: id -> title.  Kept in JS because the groups
+  // are rebuilt on every search.
   var chosenGrants = {};
   var searchTimer = null;
   var searchSeq = 0;
@@ -207,50 +225,83 @@
     });
   }
 
+  function isChosen(id) {
+    return Object.prototype.hasOwnProperty.call(chosenGrants, id);
+  }
+
   function syncGrantResults() {
-    toArray(grantResults.querySelectorAll('.nfwf-roles-check-grant'))
+    toArray(grantPicker.querySelectorAll(
+      '.nfwf-roles-grants-results .nfwf-roles-check-grant'))
       .forEach(function (box) {
-        box.checked = Object.prototype.hasOwnProperty.call(chosenGrants, box.value);
+        box.checked = isChosen(box.value);
       });
   }
 
-  function renderGrantResults(records) {
-    grantResults.textContent = '';
-    records.forEach(function (record) {
-      // Already-chosen grants show in the list above; don't draw them twice.
-      if (Object.prototype.hasOwnProperty.call(chosenGrants, record.id)) { return; }
-      grantResults.appendChild(
-        grantRow(record.id, record.title || record.name, false));
+  function resetGroup(group) {
+    group.offset = 0;
+    group.count = 0;
+    group.list.textContent = '';
+    group.countLabel.textContent = '';
+    group.more.hidden = true;
+    group.more.disabled = false;
+    group.section.hidden = true;
+  }
+
+  // Appends the group's next page.  `seq` is the search that asked for it, so a
+  // slow reply to an old query -- or a "Show more" pressed just before the query
+  // changed -- cannot land in the new results.
+  function loadGroup(group, seq) {
+    var params = {limit: GRANT_PAGE, offset: group.offset};
+    var term = search.value.trim();
+    if (term) { params.q = term; }
+    if (group.unassigned) {
+      params.unassigned = 'true';
+    } else {
+      params.program_id = group.programId;
+    }
+    group.more.disabled = true;
+
+    return apiGet('nfwf_grant_list', params).then(function (page) {
+      if (seq !== searchSeq) { return; }
+      var records = page.results || [];
+      records.forEach(function (record) {
+        // Chosen grants are drawn ticked rather than skipped, so the count
+        // beside the program stays true.
+        group.list.appendChild(
+          grantRow(record.id, record.title || record.name, isChosen(record.id)));
+      });
+      group.offset += records.length;
+      group.count = page.count || 0;
+      group.countLabel.textContent = '(' + group.count + ')';
+      group.more.hidden = !records.length || group.offset >= group.count;
+      group.more.disabled = false;
+      // An empty group is hidden rather than drawn empty.  For "(no program)"
+      // that is what the contract asks: a Program Administrator is given
+      // nothing there by design, so an absent group is correct.
+      group.section.hidden = group.count === 0;
     });
   }
 
-  function searchGrants() {
-    var term = search.value.trim();
-    // Each response carries the sequence of the request that asked for it, so a
-    // slow early reply cannot overwrite a fast later one.
+  // Every group from its first page: when the picker is shown, and per search.
+  function loadGrantGroups() {
     var seq = ++searchSeq;
-
-    if (!term) {
-      grantResults.textContent = '';
-      grantHint.textContent = 'Type to search grants by name.';
-      grantHint.hidden = false;
-      return;
-    }
-
-    grantHint.textContent = 'Searching…';
+    grantGroups.forEach(resetGroup);
+    empty.hidden = true;
+    grantHint.textContent = 'Loading…';
     grantHint.hidden = false;
 
-    apiGet('organization_autocomplete', {q: term, limit: 20})
-      .then(function (records) {
+    Promise.all(grantGroups.map(function (group) {
+      return loadGroup(group, seq);
+    }))
+      .then(function () {
         if (seq !== searchSeq) { return; }
-        renderGrantResults(records || []);
-        var shown = grantResults.children.length;
-        grantHint.hidden = shown > 0;
-        if (!shown) { grantHint.textContent = 'No matching grants.'; }
+        grantHint.hidden = true;
+        empty.hidden = grantGroups.some(function (group) {
+          return !group.section.hidden;
+        });
       })
       .catch(function (error) {
         if (seq !== searchSeq) { return; }
-        grantResults.textContent = '';
         grantHint.textContent = error.message;
         grantHint.hidden = false;
       });
@@ -267,7 +318,9 @@
     programBoxes().forEach(function (box) { box.checked = false; });
     chosenGrants = {};
     grantSelected.textContent = '';
-    grantResults.textContent = '';
+    // Bumped so any group request still in flight is dropped on arrival.
+    searchSeq++;
+    grantGroups.forEach(resetGroup);
   }
 
   // Pre-select what this user already holds -- but only while the role on
@@ -307,9 +360,10 @@
     if (scope === 'program') {
       filterPrograms();
     } else if (scope === 'grant') {
-      grantHint.textContent = 'Type to search grants by name.';
-      grantHint.hidden = false;
+      loadGrantGroups();
     }
+    // Synchronous, so the held grants are chosen before any group page lands
+    // and those rows are drawn ticked.
     applyAssignments();
 
     saveBtn.disabled = !select.value;
@@ -390,9 +444,22 @@
       filterPrograms();
       return;
     }
-    // Debounced so typing a grant name is one request, not one per keystroke.
+    // Debounced so typing a grant name is one round of requests, not one per
+    // keystroke.
     window.clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(searchGrants, 250);
+    searchTimer = window.setTimeout(loadGrantGroups, 250);
+  });
+
+  grantGroups.forEach(function (group) {
+    group.more.addEventListener('click', function () {
+      var seq = searchSeq;
+      loadGroup(group, seq).catch(function (error) {
+        if (seq !== searchSeq) { return; }
+        group.more.disabled = false;
+        grantHint.textContent = error.message;
+        grantHint.hidden = false;
+      });
+    });
   });
 
   programBoxes().forEach(function (box) {
@@ -478,10 +545,10 @@
 
   // -- account status actions ---------------------------------------------
 
-  // Approve, reject and deactivate each return a complete table row, so the row
-  // is updated from the response rather than the page being reloaded.  Status is
-  // all they change -- role and assignments are untouched -- so only the status
-  // cell and the menu that depends on it are redrawn.
+  // Each status action returns a complete table row, so the row is updated from
+  // the response rather than the page being reloaded.  Status is all they
+  // change -- role and assignments are untouched -- so only the status cell and
+  // the menu that depends on it are redrawn.
   //
   // Which actions suit which status, and the status colours, come from the
   // server (user_admin._table_meta) rather than being restated here.

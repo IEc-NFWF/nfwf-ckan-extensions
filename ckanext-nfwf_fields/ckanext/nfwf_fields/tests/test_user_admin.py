@@ -150,8 +150,8 @@ def test_row_selection_uses_ids_not_names(no_url_for):
         u'role': roles.GRANT_EDITOR,
         u'program_ids': [],
         u'grant_ids': [u'grant-1'],
-        # The grant picker searches rather than lists, so it needs the titles
-        # of what is already assigned.
+        # The grant picker pages its groups in, so it needs the titles of what
+        # is already assigned.
         u'grants': [{u'id': u'grant-1', u'title': u'Cape Fear'}],
         u'dual_scope': False,
     }
