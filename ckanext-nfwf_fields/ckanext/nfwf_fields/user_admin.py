@@ -47,6 +47,10 @@ SCOPE_NONE = 'none'
 #: ``nfwf_user_list`` refuses a larger page than this.
 MAX_PAGE_SIZE = 100
 
+#: The table's rows-per-page dropdown.  The configured default joins them if it is
+#: not already one -- see ``_page_sizes``.
+PAGE_SIZES = (5, 10, 20, 50)
+
 #: The account-status actions the kebab menu offers, keyed by the status the row
 #: is in.  Follows the contract's status machine (see "The account status
 #: machine" in the nfwf_permissions README).
@@ -82,7 +86,8 @@ def user_admin_table():
 
     Keys: ``rows`` (the current page's row dicts), ``assignments`` (feeding the
     one shared modal), ``page`` (the pager), ``q``, ``include_deactivated``,
-    ``include_rejected``, ``pager_params`` and ``authorized``.
+    ``include_rejected``, ``limit`` and ``page_sizes`` (the rows-per-page
+    dropdown), ``pager_params`` and ``authorized``.
     """
     try:
         args = request.args
@@ -94,7 +99,8 @@ def user_admin_table():
     include_deactivated = _checkbox(args, 'include_deactivated')
     include_rejected = _checkbox(args, 'include_rejected')
 
-    limit = _page_size()
+    default_limit = _default_page_size()
+    limit = _page_size(args, default_limit)
     page_number = get_page_number(args)
 
     data_dict = {
@@ -140,7 +146,10 @@ def user_admin_table():
         'q': q,
         'include_deactivated': include_deactivated,
         'include_rejected': include_rejected,
-        'pager_params': _pager_params(q, include_deactivated, include_rejected),
+        'limit': limit,
+        'page_sizes': _page_sizes(default_limit),
+        'pager_params': _pager_params(
+            q, include_deactivated, include_rejected, limit, default_limit),
         'authorized': True,
         'meta': _table_meta(),
     }
@@ -361,8 +370,7 @@ def _statuses(include_deactivated, include_rejected):
         statuses.append(roles.STATUS_REJECTED)
     return statuses
 
-
-def _page_size():
+def _default_page_size():
     """Rows per page.  Core's ckan.user_list_limit already defaults to 20."""
     try:
         size = toolkit.asint(config.get('ckan.user_list_limit'))
@@ -370,6 +378,25 @@ def _page_size():
         size = 20
     # nfwf_user_list rejects anything larger.
     return min(size or 20, MAX_PAGE_SIZE)
+
+
+def _page_sizes(default):
+    """The dropdown's choices: ``PAGE_SIZES``, plus the default if it is not one."""
+    return sorted(set(PAGE_SIZES) | {default})
+
+
+def _page_size(args, default):
+    """Rows per page, from the dropdown's ``limit``.
+
+    The same parameter name core's ``user.index`` reads.  Only a size the
+    dropdown offers is honored; anything else -- hand-typed, or from a stale
+    link -- gets the default rather than being passed through to the action.
+    """
+    try:
+        size = int(args.get('limit', ''))
+    except (TypeError, ValueError):
+        return default
+    return size if size in _page_sizes(default) else default
 
 
 def _checkbox(args, name):
@@ -383,8 +410,13 @@ def _checkbox(args, name):
     return value.lower() not in ('', '0', 'false', 'off', 'no')
 
 
-def _pager_params(q, include_deactivated, include_rejected):
-    """Filter state to carry into pager links, so paging keeps the filters."""
+def _pager_params(q, include_deactivated, include_rejected, limit,
+                  default_limit):
+    """Filter state to carry into pager links, so paging keeps the filters.
+
+    ``limit`` is carried only when it differs from the default, so the plain
+    links stay plain.
+    """
     params = {}
     if q:
         params['q'] = q
@@ -392,10 +424,13 @@ def _pager_params(q, include_deactivated, include_rejected):
         params['include_deactivated'] = '1'
     if include_rejected:
         params['include_rejected'] = '1'
+    if limit != default_limit:
+        params['limit'] = str(limit)
     return params
 
 
 def _empty_table():
+    default_limit = _default_page_size()
     return {
         'rows': [],
         'assignments': {},
@@ -403,6 +438,8 @@ def _empty_table():
         'q': '',
         'include_deactivated': False,
         'include_rejected': False,
+        'limit': default_limit,
+        'page_sizes': _page_sizes(default_limit),
         'pager_params': {},
         'authorized': True,
         'meta': _table_meta(),

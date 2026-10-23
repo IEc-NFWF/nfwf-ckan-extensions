@@ -277,14 +277,53 @@ def test_absent_checkbox_is_false():
 
 
 def test_pager_params_carry_the_active_filters():
-    assert user_admin._pager_params(u'dawn', True, False) == {
+    assert user_admin._pager_params(u'dawn', True, False, 20, 20) == {
         u'q': u'dawn',
         u'include_deactivated': u'1',
     }
 
 
 def test_pager_params_omit_inactive_filters():
-    assert user_admin._pager_params(u'', False, False) == {}
+    assert user_admin._pager_params(u'', False, False, 20, 20) == {}
+
+
+def test_pager_params_carry_a_chosen_page_size():
+    assert user_admin._pager_params(u'', False, False, 50, 20) == {
+        u'limit': u'50',
+    }
+
+
+# -- page size ---------------------------------------------------------------
+
+@pytest.mark.parametrize(u'size', user_admin.PAGE_SIZES)
+def test_every_offered_page_size_is_honored(size):
+    assert user_admin._page_size({u'limit': str(size)}, 20) == size
+
+
+@pytest.mark.parametrize(u'value', [u'', u'7', u'100', u'1000', u'-5',
+                                    u'abc', u'20.5'])
+def test_an_unoffered_page_size_gets_the_default(value):
+    """Including 100, which the action would accept but the dropdown never
+    offers -- the table pages only at the sizes it shows."""
+    assert user_admin._page_size({u'limit': value}, 20) == 20
+
+
+def test_absent_page_size_gets_the_default():
+    assert user_admin._page_size({}, 20) == 20
+
+
+def test_page_sizes_are_what_the_product_owner_asked_for():
+    assert list(user_admin.PAGE_SIZES) == [5, 10, 20, 50]
+
+
+def test_a_configured_default_joins_the_choices():
+    """Otherwise a site set to 25 would open on a size it cannot show."""
+    assert user_admin._page_sizes(25) == [5, 10, 20, 25, 50]
+    assert user_admin._page_size({u'limit': u'25'}, 25) == 25
+
+
+def test_the_default_is_not_added_twice():
+    assert user_admin._page_sizes(20) == [5, 10, 20, 50]
 
 
 # -- empty table -------------------------------------------------------------
@@ -292,5 +331,6 @@ def test_pager_params_omit_inactive_filters():
 def test_empty_table_has_every_key_the_template_reads():
     table = user_admin._empty_table()
     for key in (u'rows', u'assignments', u'page', u'q', u'include_deactivated',
-                u'include_rejected', u'pager_params', u'authorized', u'meta'):
+                u'include_rejected', u'limit', u'page_sizes', u'pager_params',
+                u'authorized', u'meta'):
         assert key in table

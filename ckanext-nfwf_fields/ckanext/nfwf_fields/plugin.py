@@ -572,9 +572,12 @@ def _user_admin_helpers():
     def unavailable_table():
         # The shape user/list.html reads, with authorized False so it shows the
         # message it already has for that case.  Mirrors user_admin._empty_table.
+        # No page_sizes, so the template drops the rows-per-page dropdown
+        # rather than this restating user_admin.PAGE_SIZES.
         return {
             'rows': [], 'assignments': {}, 'page': None, 'q': '',
             'include_deactivated': False, 'include_rejected': False,
+            'limit': None, 'page_sizes': [],
             'pager_params': {}, 'authorized': False, 'meta': {},
         }
 

@@ -87,6 +87,20 @@
                        {{ 'checked' if table.include_rejected }} />
                 {{ _('Include Rejected Accounts?') }}
               </label>
+
+              {# Inside the form so changing it keeps the search and both
+                 checkboxes, and -- having no page field -- returns to page 1. #}
+              {% if table.page_sizes %}
+                <label class="nfwf-user-filters-limit">
+                  {{ _('Rows per page') }}:
+                  <select name="limit" class="form-control"
+                          onchange="this.form.submit()">
+                    {% for size in table.page_sizes %}
+                      <option value="{{ size }}" {{ 'selected' if size == table.limit }}>{{ size }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+              {% endif %}
             </form>
           {% endblock %}
 
