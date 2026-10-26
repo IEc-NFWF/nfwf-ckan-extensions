@@ -362,6 +362,7 @@ def member_create(context, data_dict):
         u"Administrator may change what belongs to it."))
 
 
+@toolkit.auth_allow_anonymous_access
 def group_show(context, data_dict=None):
     """Let a Program Administrator see who is assigned to what.
 
@@ -397,6 +398,12 @@ def group_show(context, data_dict=None):
     through to stock. ``organization_show`` defers here
     (``ckan/logic/auth/get.py:174-175``), so the same widening applies to it,
     which is intended: the two describe the same object.
+
+    Carries ``auth_allow_anonymous_access`` because the core function does.
+    Without it CKAN refuses anonymous callers before this body runs, so a
+    logged-out visitor could open no grant or program page at all -- and
+    every dataset page in a grant broke too, since its sidebar looks the
+    grant up.
     """
     group = core.get_group_object(context, data_dict)
     caller = _caller(context)
