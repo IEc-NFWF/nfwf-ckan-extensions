@@ -111,9 +111,9 @@
                  rather than showing an empty table. #}
               <p class="empty">{{ _('You need to be a Platform Administrator to manage user accounts.') }}</p>
             {% elif table.rows %}
-              {# Where a status action reports success or failure.  The row has no
-                 room -- the actions column is 3% wide -- and the modal's own note
-                 line belongs to the modal. #}
+              {# Where a status action reports success or failure, and where a
+                 role save reports success once the modal has closed.  The row
+                 has no room -- the actions column is 3% wide. #}
               <p class="nfwf-user-notice" role="status" hidden></p>
               <div class="nfwf-user-table-wrapper">
                 <table class="table table-striped table-bordered table-condensed nfwf-user-table">
@@ -131,8 +131,9 @@
                   <tbody>
                     {% for row in table.rows %}
                       {# data-nfwf-user-row lets manage-roles.js find the row again
-                         after a status action, which returns a full table row and
-                         so can be applied in place rather than by reloading. #}
+                         after a status action or a role save, both of which
+                         return enough to redraw it in place rather than by
+                         reloading. #}
                       <tr data-nfwf-user-row="{{ row.name }}">
                         <th scope="row"><a href="{{ row.url }}">{{ row.display_name }}</a></th>
                         <td>
@@ -232,6 +233,14 @@
 
           {% block manage_roles_modal %}
             {% if can_manage_roles %}
+              {# Saving a role redraws the row's Role and Assigned Grants cells
+                 from the response, so the JS needs the qualifier's wording and
+                 the grant link the cells above were built with.  The URL keeps
+                 a __name__ placeholder for the JS to fill in. #}
+              <script type="application/json" id="nfwf-role-row-meta">{{ {
+                  'dual_scope_label': ui_labels.dual_scope,
+                  'grant_url': h.url_for('organization.read', id='__name__')
+                }|tojson }}</script>
               {# One modal for the page; the launching menu item names the user. #}
               {% snippet 'user/snippets/manage_roles_modal.html',
                  roles=h.nfwf_manageable_roles(), tree=h.nfwf_role_scope_tree(),

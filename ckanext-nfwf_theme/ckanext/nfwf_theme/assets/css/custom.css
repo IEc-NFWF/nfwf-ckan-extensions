@@ -1315,6 +1315,19 @@ a:hover, a:focus {
   border-left-color: #FF0000;
 }
 
+/* Highlight row that just changed by a role save or a status action: the notice above may
+   be scrolled out of view. */
+.nfwf-user-row-updated > * {
+  animation: nfwf-user-row-updated 3s ease-out;
+}
+
+@keyframes nfwf-user-row-updated {
+  from {
+    background-color: #e4eac0;
+    box-shadow: inset 0 0 0 9999px #e4eac0;
+  }
+}
+
 /* ------------------------------------------------------------------
    Manage Roles modal (/user)
    Hand-rolled because Bootstrap's modal JS/CSS is not served here.
@@ -1557,6 +1570,10 @@ body.nfwf-roles-open {
 .nfwf-roles-note {
   margin: 0 0 8px;
   font-size: 12px;
+  color: #666666;
+}
+
+.nfwf-roles-note-error {
   color: #a94442;
 }
 

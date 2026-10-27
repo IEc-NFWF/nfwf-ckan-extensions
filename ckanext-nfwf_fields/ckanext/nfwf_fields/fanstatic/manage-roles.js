@@ -60,6 +60,8 @@
 
   var lastFocus = null;
   var assignments = readAssignments();
+  // What redrawing a row after a save needs from the template -- see applyRole.
+  var rowMeta = readJson('nfwf-role-row-meta');
   // The one role the open user holds: {role, program_ids, grant_ids, grants}.
   var current = emptyAssignment();
   // Grants ticked in this session: id -> title.  Kept in JS because the groups
@@ -390,8 +392,14 @@
 
   // -- notices ------------------------------------------------------------
 
-  function showNote(message) {
+  // Red only for problems: "Saving…" in red read as a failure.
+  function showNote(message, isError) {
     note.textContent = message;
+    if (isError) {
+      note.classList.add('nfwf-roles-note-error');
+    } else {
+      note.classList.remove('nfwf-roles-note-error');
+    }
     note.hidden = false;
   }
 
@@ -425,6 +433,51 @@
     document.body.classList.remove('nfwf-roles-open');
     if (lastFocus && lastFocus.focus) { lastFocus.focus(); }
     lastFocus = null;
+  }
+
+  // -- updating the row ---------------------------------------------------
+
+  // Saving answers with the user's new role record, so the Role and Assigned
+  // Grants cells are redrawn from it rather than the page being reloaded, as
+  // the status actions do with Status.  Same rules as user/list.html: a
+  // Platform Administrator's assignments are retained but not in effect, so
+  // neither their grants nor the dual-scope qualifier are shown.
+  function applyRole(row, record) {
+    if (!row) { return; }
+    var inEffect = record.assignments_in_effect !== false;
+
+    var roleCell = row.querySelector('[data-nfwf-cell="role"]');
+    if (roleCell) {
+      roleCell.textContent = record.role_label || '';
+      if (record.dual_scope && inEffect) {
+        var qualifier = document.createElement('span');
+        qualifier.className = 'nfwf-user-dual-scope';
+        qualifier.textContent = rowMeta.dual_scope_label || '';
+        roleCell.appendChild(qualifier);
+      }
+    }
+
+    var grantsCell = row.querySelector('[data-nfwf-cell="grants"]');
+    if (grantsCell) {
+      grantsCell.textContent = '';
+      var grants = record.grants || [];
+      if (grants.length && inEffect) {
+        var list = document.createElement('ul');
+        list.className = 'nfwf-user-grants';
+        grants.forEach(function (grant) {
+          var link = document.createElement('a');
+          link.href = (rowMeta.grant_url || '')
+            .replace('__name__', encodeURIComponent(grant.name));
+          link.textContent = grant.title || grant.name;
+          var item = document.createElement('li');
+          item.appendChild(link);
+          list.appendChild(item);
+        });
+        grantsCell.appendChild(list);
+      }
+    }
+
+    flashRow(row);
   }
 
   // -- wiring -------------------------------------------------------------
@@ -475,13 +528,14 @@
     var userName = form.getAttribute('data-nfwf-roles-target');
 
     if (!role) {
-      showNote('Choose a role first.');
+      showNote('Choose a role first.', true);
       return;
     }
     // The action enforces this too; checking here saves a round trip and gives
     // a message in the modal's own words.
     if (scope !== 'none' && !chosen.length) {
-      showNote('Select at least one ' + scope + ' for "' + roleLabel() + '".');
+      showNote('Select at least one ' + scope + ' for "' + roleLabel() + '".',
+               true);
       return;
     }
     // This account holds both program and grant assignments, and saving replaces
@@ -491,7 +545,7 @@
     if (current.dual_scope && !dualScopeAcknowledged) {
       dualScopeAcknowledged = true;
       showNote('This account also holds assignments of the other kind, which ' +
-               'saving will remove. Press Save again to confirm.');
+               'saving will remove. Press Save again to confirm.', true);
       return;
     }
 
@@ -520,12 +574,17 @@
         current = assignments[userName];
         dualScopeAcknowledged = false;
         saveBtn.disabled = false;
-        showNote('Saved "' + (result.role_label || roleLabel()) +
-                 '". Reload to see the table update.');
+        // Done, so get out of the way: close, redraw the row, and report on
+        // the page in the same place and words as a status change.
+        var displayName = subject.textContent;
+        close();
+        applyRole(userRow(userName), result);
+        showNotice((displayName || userName) + ' is now ' +
+                   (result.role_label || roleLabel()) + '.', false);
       })
       .catch(function (error) {
         saveBtn.disabled = false;
-        showNote(error.message);
+        showNote(error.message, true);
       });
   });
 
@@ -604,6 +663,17 @@
       })[0] || null;
   }
 
+  // Shared by role saves and status actions.  Both report in the notice above
+  // the table, which may be scrolled well out of view, so the changed row is
+  // marked too.  Removed and re-added so changing the same row twice flashes it
+  // twice; reading offsetWidth in between forces the reflow that restarts the
+  // animation.
+  function flashRow(row) {
+    row.classList.remove('nfwf-user-row-updated');
+    void row.offsetWidth;
+    row.classList.add('nfwf-user-row-updated');
+  }
+
   function applyStatus(row, record, meta, labels) {
     if (!row) { return; }
 
@@ -617,6 +687,7 @@
     }
 
     rebuildStatusMenu(row, record, meta, labels);
+    flashRow(row);
   }
 
   // The row's status is what decided which actions it offers, so the two move
