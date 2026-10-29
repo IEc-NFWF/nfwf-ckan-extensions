@@ -12,6 +12,8 @@ The vocabulary tests exist to catch a regression rather than to restate the
 contract: this module used to keep its own copy of the role and status names,
 keyed by display label, which is what let the UI and the API drift apart.
 """
+from datetime import datetime
+
 import pytest
 
 from ckanext.nfwf_fields import user_admin
@@ -107,6 +109,28 @@ def test_unusable_last_login_renders_empty(stamp):
     assert user_admin.user_last_login(stamp) == u''
 
 
+_NOW = datetime(2026, 10, 28, 12, 0, 0)
+
+
+@pytest.mark.parametrize(u'stamp,expected', [
+    (u'2025-10-28T11:59:00', True),
+    (u'2024-01-01T00:00:00', True),
+    (u'2025-10-28T12:01:00', False),
+    (u'2026-10-27T09:00:00', False),
+    # An explicit offset is compared in UTC: 13:00+05:00 is 08:00 UTC.
+    (u'2025-10-28T13:00:00+05:00', True),
+    (u'2025-10-28T11:00:00Z', True),
+])
+def test_last_login_older_than_a_year_is_stale(stamp, expected):
+    assert user_admin.user_login_is_stale(stamp, now=_NOW) is expected
+
+
+@pytest.mark.parametrize(u'stamp', [None, u'', u'not a date', 12345])
+def test_missing_last_login_is_never_stale(stamp):
+    """Blank means unknown, and must stay out of red."""
+    assert user_admin.user_login_is_stale(stamp, now=_NOW) is False
+
+
 # -- status filter -----------------------------------------------------------
 
 def test_statuses_default_to_the_contracts_visible_set():
@@ -142,6 +166,11 @@ def test_row_adds_the_links_the_action_does_not_return(no_url_for):
     row = user_admin._row(_record())
     assert row[u'url'] == u'/user/dyork'
     assert row[u'grants'][0][u'url'] == u'/organization/cape-fear'
+
+def test_row_flags_a_stale_last_login(no_url_for):
+    assert user_admin._row(_record(
+        last_login=u'2020-01-01T00:00:00'))[u'last_login_stale'] is True
+    assert user_admin._row(_record(last_login=None))[u'last_login_stale'] is False
 
 
 def test_row_selection_uses_ids_not_names(no_url_for):

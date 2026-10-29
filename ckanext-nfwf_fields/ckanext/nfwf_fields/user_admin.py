@@ -23,7 +23,7 @@ Reading the query string from a helper is the established pattern in this
 extension; see ``facet_url_add`` / ``facet_url_remove`` in ``plugin.py``.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import ckan.plugins.toolkit as toolkit
 from ckan.common import config, request
@@ -46,6 +46,9 @@ SCOPE_NONE = 'none'
 
 #: ``nfwf_user_list`` refuses a larger page than this.
 MAX_PAGE_SIZE = 100
+
+#: A Last Login older than this is shown in red.
+STALE_LOGIN_AGE = timedelta(days=365)
 
 #: The table's rows-per-page dropdown.  The configured default joins them if it is
 #: not already one -- see ``_page_sizes``.
@@ -178,12 +181,8 @@ def user_last_login(stamp):
     Note this is CKAN's *last activity* column -- core records no last-login
     time -- so it can read slightly later than the user's actual login.
     """
-    if not stamp:
-        return ''
-    try:
-        # fromisoformat rejects the 'Z' suffix before Python 3.11.
-        parsed = datetime.fromisoformat(str(stamp).replace('Z', '+00:00'))
-    except (TypeError, ValueError):
+    parsed = _parse_stamp(stamp)
+    if parsed is None:
         return ''
     return '{month}/{day}/{year} {hour}:{minute:02d} {meridiem}'.format(
         month=parsed.month,
@@ -193,6 +192,35 @@ def user_last_login(stamp):
         minute=parsed.minute,
         meridiem='am' if parsed.hour < 12 else 'pm',
     )
+
+
+def user_login_is_stale(stamp, now=None):
+    """Was ``stamp`` more than ``STALE_LOGIN_AGE`` ago?
+
+    False when it is unset or unreadable.  Many accounts have no Last Login
+    yet, and a blank cell means "not known", not "long ago".  ``now`` is for
+    the tests.
+    """
+    parsed = _parse_stamp(stamp)
+    if parsed is None:
+        return False
+    # Stored naive and in UTC; an explicit offset is normalised to match.
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    if now is None:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+    return now - parsed > STALE_LOGIN_AGE
+
+
+def _parse_stamp(stamp):
+    """``nfwf_user_list``'s ISO 8601 ``last_login`` as a datetime, or None."""
+    if not stamp:
+        return None
+    try:
+        # fromisoformat rejects the 'Z' suffix before Python 3.11.
+        return datetime.fromisoformat(str(stamp).replace('Z', '+00:00'))
+    except (TypeError, ValueError):
+        return None
 
 
 def manageable_roles():
@@ -290,6 +318,7 @@ def _row(record):
         'status_label': record.get('status_label') or '',
         'status_class': user_status_class(status),
         'last_login': user_last_login(record.get('last_login')),
+        'last_login_stale': user_login_is_stale(record.get('last_login')),
         'role': role,
         'role_label': record.get('role_label') or '',
         'programs': programs,

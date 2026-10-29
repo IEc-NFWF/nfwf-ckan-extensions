@@ -1103,6 +1103,11 @@ a:hover, a:focus {
   color: #0000FF;
 }
 
+/* A Last Login more than a year old, in the same red. */
+.nfwf-user-login-stale {
+  color: #FF0000;
+}
+
 .nfwf-user-filters {
   display: flex;
   flex-wrap: wrap;
