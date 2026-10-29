@@ -391,7 +391,18 @@ def nfwf_user_reject(context, data_dict):
 
 
 def nfwf_user_deactivate(context, data_dict):
-    """Deactivate an existing account.
+    """Deactivate an existing account, removing every role it held.
+
+    A deactivated account keeps no
+    role. Every program and grant assignment is removed, whatever its capacity,
+    and so is the sysadmin flag. Unlike a promotion to Platform Administrator,
+    nothing is retained, so ``nfwf_user_reactivate`` reopens an account with no
+    role and somebody has to decide what it should get.
+
+    Removing the flag does not fully hold for an account in the Auth0
+    administrators group. The oauth2 callback grants the flag again on any
+    login attempt, before the login gate turns the account away. ``cleanup``
+    has the same limit, for the same reason.
 
     :param id: user id or name
     :type id: string
@@ -399,7 +410,8 @@ def nfwf_user_deactivate(context, data_dict):
     :rtype: the updated user dictionary, as returned by ``nfwf_user_list``
     """
     return _set_status(
-        context, data_dict, u'nfwf_user_deactivate', roles.STATUS_DEACTIVATED)
+        context, data_dict, u'nfwf_user_deactivate', roles.STATUS_DEACTIVATED,
+        strip_roles=True)
 
 
 def nfwf_user_reactivate(context, data_dict):
@@ -525,7 +537,7 @@ def _validated(data_dict, action_schema, context):
 
 
 def _set_status(context, data_dict, action_name, new_status,
-                from_statuses=None):
+                from_statuses=None, strip_roles=False):
     """Move one account to ``new_status``.
 
     ``from_statuses`` restricts which statuses the move is legal from, and is
@@ -533,6 +545,11 @@ def _set_status(context, data_dict, action_name, new_status,
     is allowed to manage accounts, it is *this* account that is in the wrong
     state, so the screen should say so on the row rather than imply the
     account does not exist.
+
+    ``strip_roles`` removes every role before the status is written. Removing
+    them first means a failure partway leaves an account that is still open
+    but holds less, which the row shows. Running the action again finishes the
+    job.
     """
     toolkit.check_access(action_name, context, data_dict)
     data = _validated(data_dict, schema.nfwf_user_id_schema(), context)
@@ -554,8 +571,22 @@ def _set_status(context, data_dict, action_name, new_status,
         # them would.
         _assert_an_administrator_remains(
             context, user, u'id', toolkit._(u'close'))
+    if strip_roles:
+        _strip_roles(context, user)
     return accounts.user_record(
         accounts.set_status(context, user, new_status))
+
+
+def _strip_roles(context, user):
+    """Remove every role ``user`` holds: the sysadmin flag and all assignments.
+
+    Goes through the same writers as ``_apply_role``, so the member actions'
+    bookkeeping runs. Both sides are cleared whatever the capacity, including
+    the retired grant capacities that confer no role but still grant access.
+    """
+    _set_sysadmin(context, user, False)
+    _replace_memberships(context, user, False, [], None)
+    _replace_memberships(context, user, True, [], None)
 
 
 def _check_assignment_scope(role, program_ids, grant_ids):

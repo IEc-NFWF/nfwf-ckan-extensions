@@ -371,8 +371,9 @@ def _table_meta():
     role names are not restated there: two copies of this vocabulary is what let
     the UI and the API drift apart once already.
 
-    Status is all these actions change -- role and assignments are untouched --
-    so nothing else about the row needs redrawing.
+    Deactivating also removes every role, so the Role and assignment cells are
+    redrawn too.  The row the action returns has no ``assignments_in_effect``,
+    unlike a role save's, so the JS looks it up by role here.
     """
     return {
         'status_actions': dict(

@@ -17,6 +17,14 @@
   // Grants per group per request
   var GRANT_PAGE = 10;
 
+  // Existing assignments for every row, keyed by user name, which the modal
+  // opens on; and what redrawing a row's Role and assignment cells needs from
+  // the template -- see drawRoleCells.  Read before the guard below because the
+  // status actions use both: deactivating removes every role.  Each degrades to
+  // empty on a page that does not render it.
+  var assignments = readAssignments();
+  var rowMeta = readJson('nfwf-role-row-meta');
+
   // The account status actions share the kebab menu with Manage Roles but not the
   // modal, and the two are gated on different auth functions -- account status is
   // Platform Administrator only, role assignment is not.  Wired before the guard
@@ -59,9 +67,6 @@
     });
 
   var lastFocus = null;
-  var assignments = readAssignments();
-  // What redrawing a row after a save needs from the template -- see applyRole.
-  var rowMeta = readJson('nfwf-role-row-meta');
   // The one role the open user holds: {role, program_ids, grant_ids, grants}.
   var current = emptyAssignment();
   // Grants ticked in this session: id -> title.  Kept in JS because the groups
@@ -605,9 +610,9 @@
   // -- account status actions ---------------------------------------------
 
   // Each status action returns a complete table row, so the row is updated from
-  // the response rather than the page being reloaded.  Status is all they
-  // change -- role and assignments are untouched -- so only the status cell and
-  // the menu that depends on it are redrawn.
+  // the response rather than the page being reloaded.  Deactivating also
+  // removes every role, so the Role and assignment cells are redrawn along with
+  // the status cell and the menu that depends on it.
   //
   // Which actions suit which status, and the status colours, come from the
   // server (user_admin._table_meta) rather than being restated here.

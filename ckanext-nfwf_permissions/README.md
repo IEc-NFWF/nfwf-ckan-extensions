@@ -437,6 +437,11 @@ without a refetch.
 | `nfwf_user_reject` | `rejected` |
 | `nfwf_user_deactivate` | `deactivated` |
 
+**Deactivating also removes every role** - all
+program and grant assignments, and the sysadmin flag. Nothing is retained, so
+a reactivated account comes back with no role. The returned row reflects
+this, so redraw the Role and assignment cells from it as well as Status.
+
 **No transition is currently refused** — approving an already-active account, or
 rejecting one that has been active for a year, both succeed. Whether some of
 those should be errors is an open question; see below. Don't rely on the API to
@@ -451,6 +456,7 @@ actions that make sense for the row's status.
 `nfwf_user_deactivate` persist. A role change rewrites the user's membership
 rows, or the `sysadmin` flag for Platform Administrator; a status change writes
 `user.state` and, for the two "gone" statuses, a marker in `plugin_extras`.
+Deactivation also deletes the membership rows and clears the `sysadmin` flag.
 Responses are safe to swap straight into a table row, and a refresh now shows
 the same thing.
 

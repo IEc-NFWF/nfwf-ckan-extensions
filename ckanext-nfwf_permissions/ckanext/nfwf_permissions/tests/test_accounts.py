@@ -818,6 +818,59 @@ class TestTheStatusStateMachine(object):
             u'CKAN state has to come back too, or the account still cannot '
             u'log in')
 
+    def test_deactivate_removes_every_assignment(self):
+        """Task 117 testing, 2026-10-28: a deactivated account keeps no role.
+        Both scopes, including a retired grant capacity, which confers no
+        role but still grants CKAN access."""
+        ctx = self._sysadmins()
+        program = factories.Group()
+        grant = factories.Organization()
+        retired = factories.Organization()
+        user = factories.User()
+        _assign(program[u'id'], user[u'name'], roles.CAPACITY_MEMBER)
+        _assign(grant[u'id'], user[u'name'], roles.CAPACITY_EDITOR)
+        _assign(retired[u'id'], user[u'name'], roles.CAPACITY_ADMIN)
+        roles.clear_cache()
+
+        result = helpers.call_action(u'nfwf_user_deactivate', context=ctx,
+                                     id=user[u'name'])
+
+        assert result[u'role'] is None
+        assert result[u'programs'] == [] and result[u'grants'] == []
+        roles.clear_cache()
+        assert not roles.programs_for_user(user[u'id'])
+        assert not roles.grants_for_user(user[u'id'])
+
+    def test_deactivate_removes_platform_administrator(self):
+        """Including any assignments a promotion had retained, so that
+        reactivating cannot hand them back."""
+        ctx = self._sysadmins()
+        grant = factories.Organization()
+        user = factories.Sysadmin()
+        _assign(grant[u'id'], user[u'name'], roles.CAPACITY_EDITOR)
+        roles.clear_cache()
+
+        helpers.call_action(u'nfwf_user_deactivate', context=ctx,
+                            id=user[u'name'])
+        helpers.call_action(u'nfwf_user_reactivate', context=ctx,
+                            id=user[u'name'])
+
+        roles.clear_cache()
+        assert not model.User.get(user[u'id']).sysadmin
+        assert roles.user_role(user[u'id']) is None
+        assert not roles.grants_for_user(user[u'id'])
+
+    def test_a_refused_deactivation_removes_nothing(self, last_admin):
+        """The administrator guard runs first, so the last Platform
+        Administrator keeps the role as well as the account."""
+        with pytest.raises(toolkit.ValidationError):
+            helpers.call_action(
+                u'nfwf_user_deactivate',
+                context={u'user': last_admin.ordinary[u'name']},
+                id=last_admin.only[u'id'])
+
+        assert model.User.get(last_admin.only[u'id']).sysadmin
+
     def test_reactivate_refuses_a_rejected_account(self):
         """Letting a rejected request in is approving it, and `approve` is
         the action that leaves the right word in the audit trail."""
