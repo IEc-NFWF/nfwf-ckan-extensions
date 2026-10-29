@@ -265,7 +265,7 @@ Mockup column → response field:
 | Status | `status_label` (color off `status`) |
 | Last Login | `last_login` |
 | Role | `role_label` — flag the row when `dual_scope` is true, see below |
-| Assigned Grants | `grants[].title`, as a bulleted list |
+| Assigned Grants / Programs | `programs[].title` then `grants[].title`, as a bulleted list |
 
 **`dual_scope` means the role shown is not the whole story.** The account holds
 both a program and a grant assignment, which one-role-per-user forbids and most

@@ -163,9 +163,14 @@ def test_row_carries_the_label_not_the_slug(no_url_for):
 
 
 def test_row_adds_the_links_the_action_does_not_return(no_url_for):
-    row = user_admin._row(_record())
+    row = user_admin._row(_record(programs=[
+        {u'id': u'program-1', u'name': u'ncrf', u'title': u'NCRF'},
+    ]))
     assert row[u'url'] == u'/user/dyork'
     assert row[u'grants'][0][u'url'] == u'/organization/cape-fear'
+    # Program Administrators and Readers list their programs in the same cell.
+    assert row[u'programs'][0][u'url'] == u'/group/ncrf'
+
 
 def test_row_flags_a_stale_last_login(no_url_for):
     assert user_admin._row(_record(
@@ -284,6 +289,15 @@ def test_table_meta_covers_every_status():
     meta = user_admin._table_meta()
     assert sorted(meta[u'status_actions']) == sorted(roles.STATUSES)
     assert sorted(meta[u'status_classes']) == sorted(roles.STATUSES)
+
+
+def test_table_meta_says_which_roles_assignments_apply_to():
+    """A status action's row lacks assignments_in_effect, and deactivating
+    redraws the assignment cell from it."""
+    in_effect = user_admin._table_meta()[u'assignments_in_effect']
+    assert sorted(in_effect) == sorted(roles.ROLES)
+    assert in_effect[roles.PLATFORM_ADMIN] is False
+    assert in_effect[roles.GRANT_EDITOR] is True
 
 
 # -- query string ------------------------------------------------------------

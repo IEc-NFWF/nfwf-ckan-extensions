@@ -93,6 +93,22 @@
     return readJson('nfwf-roles-assignments');
   }
 
+  // A role save's record or a status action's row -- both carry these fields --
+  // in the shape the modal opens on.  dual_scope is re-read rather than
+  // cleared: a role change can leave the account holding both scopes again,
+  // so the next Save must warn afresh.
+  function selectionFrom(record) {
+    return {
+      role: record.role || '',
+      program_ids: (record.programs || []).map(function (p) { return p.id; }),
+      grant_ids: (record.grants || []).map(function (g) { return g.id; }),
+      grants: (record.grants || []).map(function (g) {
+        return {id: g.id, title: g.title || g.name};
+      }),
+      dual_scope: !!record.dual_scope
+    };
+  }
+
   // The page hands JS its data in <script type="application/json"> blocks rather
   // than data attributes; a missing or malformed one degrades to empty.
   function readJson(id) {
@@ -443,45 +459,12 @@
   // -- updating the row ---------------------------------------------------
 
   // Saving answers with the user's new role record, so the Role and Assigned
-  // Grants cells are redrawn from it rather than the page being reloaded, as
-  // the status actions do with Status.  Same rules as user/list.html: a
-  // Platform Administrator's assignments are retained but not in effect, so
-  // neither their grants nor the dual-scope qualifier are shown.
+  // Grants / Programs cells are redrawn from it rather than the page being
+  // reloaded, as the status actions do with Status.  The record says outright
+  // whether its assignments are in effect.
   function applyRole(row, record) {
     if (!row) { return; }
-    var inEffect = record.assignments_in_effect !== false;
-
-    var roleCell = row.querySelector('[data-nfwf-cell="role"]');
-    if (roleCell) {
-      roleCell.textContent = record.role_label || '';
-      if (record.dual_scope && inEffect) {
-        var qualifier = document.createElement('span');
-        qualifier.className = 'nfwf-user-dual-scope';
-        qualifier.textContent = rowMeta.dual_scope_label || '';
-        roleCell.appendChild(qualifier);
-      }
-    }
-
-    var grantsCell = row.querySelector('[data-nfwf-cell="grants"]');
-    if (grantsCell) {
-      grantsCell.textContent = '';
-      var grants = record.grants || [];
-      if (grants.length && inEffect) {
-        var list = document.createElement('ul');
-        list.className = 'nfwf-user-grants';
-        grants.forEach(function (grant) {
-          var link = document.createElement('a');
-          link.href = (rowMeta.grant_url || '')
-            .replace('__name__', encodeURIComponent(grant.name));
-          link.textContent = grant.title || grant.name;
-          var item = document.createElement('li');
-          item.appendChild(link);
-          list.appendChild(item);
-        });
-        grantsCell.appendChild(list);
-      }
-    }
-
+    drawRoleCells(row, record, record.assignments_in_effect !== false);
     flashRow(row);
   }
 
@@ -565,17 +548,7 @@
       .then(function (result) {
         // Keep the page's copy in step so reopening the modal shows what was
         // just saved without a reload.
-        assignments[userName] = {
-          role: result.role || '',
-          program_ids: (result.programs || []).map(function (p) { return p.id; }),
-          grant_ids: (result.grants || []).map(function (g) { return g.id; }),
-          grants: (result.grants || []).map(function (g) {
-            return {id: g.id, title: g.title || g.name};
-          }),
-          // Re-read rather than cleared: a role change can leave the account
-          // holding both scopes again, so the next Save must warn afresh.
-          dual_scope: !!result.dual_scope
-        };
+        assignments[userName] = selectionFrom(result);
         current = assignments[userName];
         dualScopeAcknowledged = false;
         saveBtn.disabled = false;
@@ -692,7 +665,56 @@
     }
 
     rebuildStatusMenu(row, record, meta, labels);
+    // Unlike a role save's record, this row does not say whether its
+    // assignments are in effect, so that is looked up by role.  The other
+    // status actions leave the role alone, and this redraws it unchanged.
+    drawRoleCells(row, record,
+                  (meta.assignments_in_effect || {})[record.role] !== false);
+    assignments[record.name] = selectionFrom(record);
     flashRow(row);
+  }
+
+  // The Role and Assigned Grants / Programs cells, by the same rules as
+  // user/list.html: a Platform Administrator's assignments are retained but
+  // not in effect, so neither they nor the dual-scope qualifier are shown.
+  function drawRoleCells(row, record, inEffect) {
+    var roleCell = row.querySelector('[data-nfwf-cell="role"]');
+    if (roleCell) {
+      roleCell.textContent = record.role_label || '';
+      if (record.dual_scope && inEffect) {
+        var qualifier = document.createElement('span');
+        qualifier.className = 'nfwf-user-dual-scope';
+        qualifier.textContent = rowMeta.dual_scope_label || '';
+        roleCell.appendChild(qualifier);
+      }
+    }
+
+    var cell = row.querySelector('[data-nfwf-cell="assignments"]');
+    if (!cell) { return; }
+    cell.textContent = '';
+    if (!inEffect) { return; }
+
+    // Programs first, as the template lists them.
+    var items = linkItems(record.programs, rowMeta.program_url)
+      .concat(linkItems(record.grants, rowMeta.grant_url));
+    if (!items.length) { return; }
+    var list = document.createElement('ul');
+    list.className = 'nfwf-user-assignments';
+    items.forEach(function (item) { list.appendChild(item); });
+    cell.appendChild(list);
+  }
+
+  // One linked list item per program or grant.  `url` carries a __name__
+  // placeholder -- see nfwf-role-row-meta in user/list.html.
+  function linkItems(groups, url) {
+    return (groups || []).map(function (group) {
+      var link = document.createElement('a');
+      link.href = (url || '').replace('__name__', encodeURIComponent(group.name));
+      link.textContent = group.title || group.name;
+      var item = document.createElement('li');
+      item.appendChild(link);
+      return item;
+    });
   }
 
   // The row's status is what decided which actions it offers, so the two move

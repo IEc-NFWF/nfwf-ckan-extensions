@@ -124,7 +124,7 @@
                       <th scope="col">{{ _('Status') }}</th>
                       <th scope="col">{{ _('Last Login') }}</th>
                       <th scope="col">{{ _('Role') }}</th>
-                      <th scope="col">{{ _('Assigned Grants') }}</th>
+                      <th scope="col">{{ _('Assigned Grants / Programs') }}</th>
                       <th scope="col" aria-label="{{ _('Actions') }}"></th>
                     </tr>
                   </thead>
@@ -159,12 +159,18 @@
                             <span class="nfwf-user-dual-scope">{{ ui_labels.dual_scope }}</span>
                           {% endif %}
                         </td>
-                        <td data-nfwf-cell="grants">
-                          {# A Platform Administrator's grants are retained on the
-                             record but superseded by the sysadmin flag, so showing
-                             them here would imply they still apply. #}
-                          {% if row.grants and row.assignments_in_effect %}
-                            <ul class="nfwf-user-grants">
+                        <td data-nfwf-cell="assignments">
+                          {# Programs for the two program roles, grants for a Grant
+                             Editor.  A dual-scope account holds both, and lists
+                             both, programs first.  A Platform Administrator's are
+                             retained on the record but superseded by the sysadmin
+                             flag, so showing them here would imply they still
+                             apply. #}
+                          {% if (row.programs or row.grants) and row.assignments_in_effect %}
+                            <ul class="nfwf-user-assignments">
+                              {% for program in row.programs %}
+                                <li><a href="{{ program.url }}">{{ program.title }}</a></li>
+                              {% endfor %}
                               {% for grant in row.grants %}
                                 <li><a href="{{ grant.url }}">{{ grant.title }}</a></li>
                               {% endfor %}
@@ -239,16 +245,23 @@
             {% endif %}
           {% endblock %}
 
-          {% block manage_roles_modal %}
-            {% if can_manage_roles %}
-              {# Saving a role redraws the row's Role and Assigned Grants cells
-                 from the response, so the JS needs the qualifier's wording and
-                 the grant link the cells above were built with.  The URL keeps
-                 a __name__ placeholder for the JS to fill in. #}
+          {% block role_row_data %}
+            {% if can_manage_roles or can_manage_accounts %}
+              {# Saving a role, and deactivating, both redraw the row's Role and
+                 Assigned Grants / Programs cells from the response, so the JS
+                 needs the qualifier's wording and the links the cells above
+                 were built with.  The URLs keep a __name__ placeholder for the
+                 JS to fill in. #}
               <script type="application/json" id="nfwf-role-row-meta">{{ {
                   'dual_scope_label': ui_labels.dual_scope,
-                  'grant_url': h.url_for('organization.read', id='__name__')
+                  'grant_url': h.url_for('organization.read', id='__name__'),
+                  'program_url': h.url_for('group.read', id='__name__')
                 }|tojson }}</script>
+            {% endif %}
+          {% endblock %}
+
+          {% block manage_roles_modal %}
+            {% if can_manage_roles %}
               {# One modal for the page; the launching menu item names the user. #}
               {% snippet 'user/snippets/manage_roles_modal.html',
                  roles=h.nfwf_manageable_roles(), tree=h.nfwf_role_scope_tree(),

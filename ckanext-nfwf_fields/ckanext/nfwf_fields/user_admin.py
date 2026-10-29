@@ -296,6 +296,7 @@ def _row(record):
             'id': program['id'],
             'name': program['name'],
             'title': program.get('title') or program['name'],
+            'url': url_for('group.read', id=program['name']),
         }
         for program in record.get('programs') or []
     ]
@@ -383,6 +384,9 @@ def _table_meta():
         ),
         'status_classes': dict(
             (status, user_status_class(status)) for status in roles.STATUSES
+        ),
+        'assignments_in_effect': dict(
+            (role, roles.assignments_in_effect(role)) for role in roles.ROLES
         ),
     }
 

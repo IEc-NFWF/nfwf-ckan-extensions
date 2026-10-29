@@ -1192,7 +1192,7 @@ a:hover, a:focus {
 }
 
 /* Column widths, in source order: Name, Email, Status, Last Login, Role,
-   Assigned Grants, actions. Percentages total 100. */
+   Assigned Grants / Programs, actions. Percentages total 100. */
 .nfwf-user-table {
   table-layout: fixed;
   width: 100%;
@@ -1228,7 +1228,7 @@ a:hover, a:focus {
   font-weight: normal;
 }
 
-.nfwf-user-grants {
+.nfwf-user-assignments {
   margin: 0 0 0 15px;
   padding: 0;
   list-style: disc;
